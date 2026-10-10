@@ -65,8 +65,8 @@
     #outputCanvas { width: 100%; display: block; }
 
     .metric-grid { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; text-align: center; }
-    .metric-title { font-size: 0.7rem; color: #8a9fc2; font-weight: 700; }
-    .metric-value { font-family: 'Space Mono', monospace; font-size: 2.2rem; font-weight: 700; color: #fff; }
+    .metric-title { font-size: 0.7rem; color: #8a9fc2; font-weight: 700; height: 20px; }
+    .metric-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; color: #fff; }
     #val-1 { color: var(--green); }
     #val-2 { color: var(--cyan); }
 
@@ -79,18 +79,18 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 22.0 // TRUE VERTICAL CORONAL</div>
+      <div class="badge">SYS. V 23.0 // RESEARCH PIPELINE</div>
       <h1>POSTURE AI</h1>
     </div>
     
     <div class="view-toggles">
-      <button class="view-btn active" id="viewSagittal">SAGITTAL (SIDE)</button>
-      <button class="view-btn" id="viewCoronal">CORONAL (FRONT)</button>
+      <button class="view-btn active" id="viewSagittal">SAGITTAL</button>
+      <button class="view-btn" id="viewCoronal">CORONAL</button>
     </div>
 
     <div class="upload-zone" id="dropArea">
       <span style="font-size: 1.5rem; display:block; margin-bottom:5px;">⛶</span>
-      <span style="font-size: 0.8rem; font-weight: 700; color:#a1b0cb;">TAP TO LOAD SCAN</span>
+      <span style="font-size: 0.8rem; font-weight: 700; color:#a1b0cb;">TAP TO LOAD CALIBRATION IMAGE</span>
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
@@ -100,12 +100,12 @@
 
     <div class="metric-grid">
       <div>
-        <div class="metric-title" id="lbl-1">SHA (HEAD POSTURE)</div>
+        <div class="metric-title" id="lbl-1">CVA (HEAD POSTURE)</div>
         <div class="metric-value" id="val-1">--°</div>
       </div>
       <div>
-        <div class="metric-title" id="lbl-2">CRA (HEAD TILT)</div>
-        <div class="metric-value" id="val-2">--°</div>
+        <div class="metric-title" id="lbl-2">NORM. DISPLACEMENT</div>
+        <div class="metric-value" id="val-2">--</div>
       </div>
     </div>
 
@@ -132,7 +132,7 @@
     const patientIdInput = document.getElementById('patientId');
 
     let currentMode = 'SAGITTAL';
-    let metrics = { m1: null, m2: null, side: null };
+    let metrics = { m1: null, m2: null, side: null, raw1: 0, raw2: 0 };
     let rawNodes = {};
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
@@ -143,14 +143,14 @@
     
     function updateLabels() {
       if(currentMode === 'SAGITTAL') {
-        lbl1.innerText = "SHA (HEAD POSTURE)"; lbl2.innerText = "CRA (HEAD TILT)";
+        lbl1.innerText = "CVA (HEAD POSTURE)"; lbl2.innerText = "NORM. DISPLACEMENT";
       } else {
-        lbl1.innerText = "SLA (SHOULDER LEVEL)"; lbl2.innerText = "CTA (CORONAL TILT)";
+        lbl1.innerText = "SHOULDER SLOPE"; lbl2.innerText = "ASYMMETRY INDEX";
       }
     }
 
     function resetMetrics() {
-      val1.innerText = "--°"; val2.innerText = "--°";
+      val1.innerText = "--°"; val2.innerText = "--";
       saveBtn.disabled = true; saveBtn.classList.remove('active');
       metrics = { m1: null, m2: null, side: null };
     }
@@ -174,64 +174,83 @@
         const radius = Math.max(5, canvas.width * 0.012);
         
         if (currentMode === 'SAGITTAL') {
-          const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
-          const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
+          // --- SAGITTAL GEOMETRY ENGINE ---
+          const rightEar = lm[8], rightShoulder = lm[12], rightHip = lm[24];
+          const leftEar = lm[7], leftShoulder = lm[11], leftHip = lm[23];
+          
           const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
           const ear = useRightSide ? rightEar : leftEar;
           const shoulder = useRightSide ? rightShoulder : leftShoulder;
-          const eye = useRightSide ? rightEye : leftEye;
+          const hip = useRightSide ? rightHip : leftHip;
 
-          const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
-          const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
+          const earX = ear.x * canvas.width, earY = ear.y * canvas.height;
           const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
+          const hipX = hip.x * canvas.width, hipY = hip.y * canvas.height;
           
-          metrics.side = (eyeX < tragusX) ? "LEFT" : "RIGHT"; 
-          rawNodes = { acro: {x: Math.round(acroX), y: Math.round(acroY)}, tragus: {x: Math.round(tragusX), y: Math.round(tragusY)}, eye: {x: Math.round(eyeX), y: Math.round(eyeY)} };
+          metrics.side = (earX < acroX) ? "LEFT" : "RIGHT"; 
+          rawNodes = { acro: {x: Math.round(acroX), y: Math.round(acroY)}, ear: {x: Math.round(earX), y: Math.round(earY)}, hip: {x: Math.round(hipX), y: Math.round(hipY)} };
 
-          metrics.m1 = Math.round(Math.atan2(acroY - tragusY, Math.abs(tragusX - acroX)) * (180 / Math.PI)); 
-          metrics.m2 = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI));
+          // 1. CVA Formula
+          const cvaDx = Math.abs(earX - acroX);
+          const cvaDy = acroY - earY;
+          metrics.m1 = Math.round(Math.atan2(cvaDy, cvaDx) * (180 / Math.PI)); 
 
-          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(tragusX, tragusY); ctx.stroke();
-          ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
+          // 2. Perspective Normalization (Torso Ratio)
+          const torsoLength = Math.hypot(hipX - acroX, hipY - acroY);
+          const fhpDisplacement = cvaDx;
+          metrics.raw2 = (fhpDisplacement / torsoLength).toFixed(2);
+          metrics.m2 = metrics.raw2; // Display as raw ratio
+
+          // Drawing
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(earX, earY); ctx.stroke();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(hipX, hipY); ctx.stroke();
           ctx.fillStyle = '#fff';
-          [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          [ {x:acroX, y:acroY}, {x:earX, y:earY}, {x:hipX, y:hipY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+
+          val1.innerText = `${metrics.m1}°`; 
+          val2.innerText = `${metrics.m2}`;
 
         } else {
-          // V22 Upgrade: Ears for tilt, Nose for plumb line
-          const rAcro = lm[12], lAcro = lm[11], rEar = lm[8], lEar = lm[7], nose = lm[0];
+          // --- FRONT VIEW GEOMETRY ENGINE ---
+          const rAcro = lm[12], lAcro = lm[11], rEar = lm[8], lEar = lm[7];
           
           const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
           const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
           const reX = rEar.x * canvas.width, reY = rEar.y * canvas.height;
           const leX = lEar.x * canvas.width, leY = lEar.y * canvas.height;
-          const nx = nose.x * canvas.width, ny = nose.y * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)}, nose: {x: Math.round(nx), y: Math.round(ny)} };
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)} };
 
-          metrics.m1 = Math.round(Math.abs(Math.atan2(raY - laY, raX - laX) * (180 / Math.PI)));
-          metrics.m2 = Math.round(Math.abs(Math.atan2(reY - leY, reX - leX) * (180 / Math.PI)));
+          // 1. Shoulder Slope (Deviation from Horizon)
+          const slopeDy = Math.abs(raY - laY);
+          const slopeDx = Math.abs(raX - laX);
+          metrics.m1 = Math.round(Math.atan2(slopeDy, slopeDx) * (180 / Math.PI));
 
-          // Shoulder Line
-          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
-          // Ear Tilt Line
-          ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(leX, leY); ctx.lineTo(reX, reY); ctx.stroke();
+          // 2. Head Tilt Ratio (Asymmetry Index)
+          const headMidX = (reX + leX) / 2;
+          const neckMidX = (raX + laX) / 2;
+          const shoulderWidth = Math.abs(raX - laX);
           
-          // True Vertical Nose Plumb Line
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.setLineDash([8, 8]);
-          ctx.beginPath(); ctx.moveTo(nx, ny - 150); ctx.lineTo(nx, raY + 50); ctx.stroke();
-          ctx.setLineDash([]);
+          metrics.raw2 = (Math.abs(headMidX - neckMidX) / shoulderWidth).toFixed(3);
+          metrics.m2 = metrics.raw2; 
 
+          // Drawing
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
+          ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(headMidX, reY - 20); ctx.lineTo(neckMidX, raY); ctx.stroke();
+          
           ctx.fillStyle = '#fff';
-          [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY}, {x:nx, y:ny} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY}, {x:headMidX, y:(reY+leY)/2}, {x:neckMidX, y:(raY+laY)/2} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          
+          val1.innerText = `${metrics.m1}°`; 
+          val2.innerText = `${metrics.m2}`;
         }
 
-        val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}°`;
         saveBtn.disabled = false; saveBtn.classList.add('active');
       }
     });
 
-    // --- REBUILT ONE-PAGE EXECUTIVE PDF GENERATOR ---
+    // --- REBUILT CLINICAL PDF ENGINE ---
     saveBtn.addEventListener('click', () => {
       if (metrics.m1 === null) return;
       const { jsPDF } = window.jspdf;
@@ -240,32 +259,44 @@
       const timeSafe = new Date().toISOString().replace(/[:.]/g, '-');
       const dateStr = new Date().toLocaleString();
 
-      let severity = "NORMAL ALIGNMENT"; let sevColor = [0, 150, 50]; 
-      let m1Name = "", m2Name = "", norm1 = "", norm2 = "";
+      let severity = "OPTIMAL ALIGNMENT"; let sevColor = [0, 150, 50]; 
+      let m1Name = "", m2Name = "", norm1 = "", norm2 = "", feedbackStr = "";
 
       if(currentMode === 'SAGITTAL') {
-          m1Name = "Sagittal Head Angle (SHA)"; m2Name = "Cranial Angle (CRA)";
-          norm1 = "> 50.0° (Healthy)"; norm2 = "N/A (Gaze Dependent)";
-          if (metrics.m1 < 50) { severity = "MILD DEVIATION (FHP)"; sevColor = [200, 150, 0]; }
-          if (metrics.m1 < 45) { severity = "MODERATE DEVIATION (FHP)"; sevColor = [220, 100, 0]; }
-          if (metrics.m1 < 40) { severity = "SEVERE DEVIATION (FHP)"; sevColor = [200, 0, 0]; }
+          m1Name = "Craniovertebral Angle (CVA)"; m2Name = "Torso-Normalized FHP Ratio";
+          norm1 = ">= 50.0° (Optimal)"; norm2 = "Baseline Scale Variant";
+          
+          if (metrics.m1 < 50 && metrics.m1 >= 45) { 
+              severity = "MILD FORWARD HEAD POSTURE"; sevColor = [200, 150, 0]; 
+              feedbackStr = "Detected mild deviation. Recommend continuous monitoring and cervical retraction exercises.";
+          }
+          if (metrics.m1 < 45) { 
+              severity = "SEVERE DEVIATION (FHP)"; sevColor = [200, 0, 0]; 
+              feedbackStr = "Detected high deviation. Significant forward head posture noted. Evaluation advised.";
+          }
+          if (metrics.m1 >= 50) {
+              feedbackStr = "Patient falls within optimal sagittal alignment parameters.";
+          }
       } else {
-          m1Name = "Shoulder Level Angle (SLA)"; m2Name = "Coronal Head Tilt (CTA)";
-          norm1 = "< 3.0° (Symmetrical)"; norm2 = "< 3.0° (Symmetrical)";
-          if (metrics.m1 >= 3 || metrics.m2 >= 3) { severity = "MILD ASYMMETRY"; sevColor = [200, 150, 0]; }
-          if (metrics.m1 >= 5 || metrics.m2 >= 5) { severity = "MODERATE ASYMMETRY"; sevColor = [220, 100, 0]; }
-          if (metrics.m1 >= 8 || metrics.m2 >= 8) { severity = "SEVERE ASYMMETRY"; sevColor = [200, 0, 0]; }
+          m1Name = "Shoulder Slope"; m2Name = "Asymmetry Index (Head Tilt Ratio)";
+          norm1 = "< 3.0° (Symmetrical)"; norm2 = "Index < 0.05";
+          
+          if (metrics.m1 >= 3 || metrics.raw2 >= 0.05) { 
+              severity = "ASYMMETRY DETECTED"; sevColor = [200, 100, 0]; 
+              feedbackStr = "Detected lateral head tilt or shoulder drop. Consider evaluating unilateral muscle tension.";
+          } else {
+              feedbackStr = "Patient demonstrates solid coronal symmetry and leveling.";
+          }
       }
 
-      // PAGE RENDERING
       doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F');
       doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
 
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
-      doc.text("EXECUTIVE POSTURAL REPORT", 20, 30);
+      doc.text("CLINICAL POSTURE REPORT", 20, 30);
       
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(80, 90, 100);
-      doc.text(`Subject ID: ${pId}   |   Date: ${dateStr}   |   View: ${currentMode}`, 20, 38);
+      doc.text(`Subject ID: ${pId}   |   Date: ${dateStr}   |   Mode: ${currentMode}`, 20, 38);
 
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdfWidth = 100; const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
@@ -276,42 +307,35 @@
       
       doc.setFillColor(245, 245, 250); doc.rect(20, tableY, 170, 16, 'F');
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
-      doc.text("CLINICAL INDICATION:", 25, tableY + 11);
+      doc.text("ZONE INDICATION:", 25, tableY + 11);
       doc.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
-      doc.text(severity, 80, tableY + 11);
+      doc.text(severity, 75, tableY + 11);
 
-      // Compact Table
       const dataY = tableY + 25;
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-      doc.text("I. TELEMETRY & BASELINES", 20, dataY);
+      doc.text("I. CALIBRATION METRICS", 20, dataY);
       doc.setDrawColor(0, 200, 200); doc.line(20, dataY + 3, 190, dataY + 3);
 
       doc.setFontSize(10); doc.setTextColor(80, 90, 100); doc.setFont("helvetica", "normal");
       doc.text(m1Name, 25, dataY + 13);
-      doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text(`${metrics.m1}°`, 90, dataY + 13);
+      doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text(`${metrics.m1}°`, 95, dataY + 13);
       doc.setFont("helvetica", "normal"); doc.setTextColor(80, 90, 100); doc.text(norm1, 130, dataY + 13);
 
       doc.text(m2Name, 25, dataY + 23);
-      doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text(`${metrics.m2}°`, 90, dataY + 23);
+      doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text(`${metrics.m2}`, 95, dataY + 23);
       doc.setFont("helvetica", "normal"); doc.setTextColor(80, 90, 100); doc.text(norm2, 130, dataY + 23);
 
-      // Raw Data String
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-      doc.text("II. RAW CANVAS COORDINATES", 20, dataY + 40);
+      doc.text("II. CLINICAL FEEDBACK", 20, dataY + 40);
       doc.setDrawColor(0, 200, 200); doc.line(20, dataY + 43, 190, dataY + 43);
+      
+      doc.setFontSize(10); doc.setTextColor(80, 90, 100); doc.setFont("helvetica", "italic");
+      doc.text(`"${feedbackStr}"`, 25, dataY + 53);
 
-      doc.setFontSize(9); doc.setTextColor(80, 90, 100); doc.setFont("helvetica", "normal");
-      if(currentMode === 'SAGITTAL') {
-          doc.text(`Acromion: (${rawNodes.acro.x}, ${rawNodes.acro.y}) | Tragus: (${rawNodes.tragus.x}, ${rawNodes.tragus.y}) | Eye: (${rawNodes.eye.x}, ${rawNodes.eye.y})`, 25, dataY + 53);
-      } else {
-          doc.text(`R.Acro: (${rawNodes.rAcro.x}, ${rawNodes.rAcro.y}) | L.Acro: (${rawNodes.lAcro.x}, ${rawNodes.lAcro.y}) | Nose: (${rawNodes.nose.x}, ${rawNodes.nose.y})`, 25, dataY + 53);
-          doc.text(`R.Ear: (${rawNodes.rEar.x}, ${rawNodes.rEar.y}) | L.Ear: (${rawNodes.lEar.x}, ${rawNodes.lEar.y})`, 25, dataY + 60);
-      }
-
-      doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+      doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
       doc.text("DISCLAIMER: Objective markerless AI estimation. Not a formal medical diagnosis.", 20, 285);
 
-      doc.save(`Omni_Report_${currentMode}_${pId}_${timeSafe}.pdf`);
+      doc.save(`Clinical_Report_${currentMode}_${pId}_${timeSafe}.pdf`);
       
       const originalText = saveBtn.innerText; saveBtn.innerText = "PDF GENERATED";
       setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
