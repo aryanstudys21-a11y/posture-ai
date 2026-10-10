@@ -6,176 +6,199 @@
   <title>Clinical Posture AI</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #030712;
-      --card-bg: #111827;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --cyan: #06b6d4;
-      --cyan-glow: rgba(6, 182, 212, 0.4);
-      --green: #10b981;
-      --border: #1f2937;
+      --cyan: #00f0ff;
+      --green: #00ff9d;
+      --dark: #050914;
+      --glass: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
     }
-    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+    
+    * { box-sizing: border-box; }
+    
     body {
-      background: var(--bg);
-      color: var(--text);
       margin: 0;
-      padding: 24px 16px;
+      padding: 20px;
+      min-height: 100vh;
+      background-color: var(--dark);
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(0, 255, 157, 0.08), transparent 25%);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
       display: flex;
       justify-content: center;
-      min-height: 100vh;
-      background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, transparent 70%);
+      align-items: center;
+      overflow-x: hidden;
     }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 32px 24px;
+
+    /* Floating energy orbs in background */
+    .orb { position: fixed; border-radius: 50%; filter: blur(80px); z-index: -1; animation: float 10s infinite alternate ease-in-out; }
+    .orb-1 { width: 300px; height: 300px; background: rgba(0, 240, 255, 0.15); top: -100px; left: -100px; }
+    .orb-2 { width: 400px; height: 400px; background: rgba(0, 255, 157, 0.1); bottom: -150px; right: -100px; animation-delay: -5s; }
+    @keyframes float { 0% { transform: translate(0, 0); } 100% { transform: translate(30px, 50px); } }
+
+    .glass-panel {
+      background: var(--glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--glass-border);
+      border-radius: 30px;
+      padding: 30px;
       width: 100%;
-      max-width: 480px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      max-width: 460px;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 24px;
+      position: relative;
     }
-    h1 {
-      font-size: 1.75rem;
-      font-weight: 800;
+
+    .header { text-align: center; }
+    .header h1 {
+      font-weight: 900;
+      font-size: 2rem;
       margin: 0;
-      text-align: center;
-      background: linear-gradient(to right, #fff, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #fff, #8a9fc2);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
     .badge {
-      align-self: center;
-      font-size: 0.75rem;
-      font-weight: 800;
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
       color: var(--cyan);
-      background: rgba(6, 182, 212, 0.1);
-      border: 1px solid rgba(6, 182, 212, 0.3);
-      border-radius: 8px;
-      padding: 6px 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      box-shadow: 0 0 15px var(--cyan-glow);
+      background: rgba(0, 240, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      margin-bottom: 8px;
+      letter-spacing: 1px;
     }
-    .upload-box {
+
+    .upload-zone {
       position: relative;
-      border: 2px dashed rgba(6, 182, 212, 0.5);
-      background: rgba(6, 182, 212, 0.03);
-      border-radius: 16px;
-      padding: 24px 16px;
-      text-align: center;
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--cyan);
-      font-size: 1rem;
-      transition: all 0.3s ease;
-    }
-    .upload-box:hover {
-      background: rgba(6, 182, 212, 0.08);
-      border-color: var(--cyan);
-      box-shadow: 0 0 20px var(--cyan-glow);
-    }
-    .upload-box input {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-    }
-    #statusBanner {
-      display: none;
-      text-align: center;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%);
+      border-radius: 20px;
       padding: 20px;
-      border-radius: 16px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      text-align: center;
+      transition: all 0.3s;
+      overflow: hidden;
     }
-    .cva-number {
-      display: block;
-      font-size: 3.5rem;
-      font-weight: 800;
+    .upload-zone:hover { border-color: var(--cyan); background: rgba(0, 240, 255, 0.02); }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 10; }
+    .upload-zone .icon { font-size: 24px; margin-bottom: 8px; display: block; opacity: 0.8; }
+    .upload-zone .text { font-size: 0.9rem; font-weight: 500; color: #a1b0cb; }
+
+    #hud-display { display: none; }
+    
+    .data-card {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .data-card::before {
+      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+    }
+    .data-label { font-size: 0.85rem; color: #8a9fc2; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 5px; }
+    .cva-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 4rem;
+      font-weight: 700;
       color: var(--green);
       line-height: 1;
-      text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-      margin-top: 8px;
+      text-shadow: 0 0 30px rgba(0, 255, 157, 0.4);
     }
-    #outputCanvas {
-      width: 100%;
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      background: #000;
-      display: none;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 10px;
-    }
+
+    .canvas-container { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    #outputCanvas { width: 100%; display: block; }
+    
+    /* HUD Corner Accents */
+    .canvas-container::before, .canvas-container::after { content: ''; position: absolute; width: 20px; height: 20px; border: 2px solid var(--cyan); z-index: 5; pointer-events: none; }
+    .canvas-container::before { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+    .canvas-container::after { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+    .inputs { display: flex; flex-direction: column; gap: 12px; }
     input[type="text"] {
-      width: 100%;
-      padding: 16px;
-      background: #1f2937;
-      border: 1px solid #374151;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 1rem;
-      outline: none;
-      transition: border 0.3s;
-    }
-    input[type="text"]:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
-    }
-    button#saveBtn {
-      width: 100%;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--glass-border);
       padding: 18px;
-      border: none;
-      border-radius: 12px;
-      background: #1f2937;
-      color: #6b7280;
-      font-size: 1.1rem;
-      font-weight: 800;
-      cursor: not-allowed;
-      transition: all 0.3s ease;
-    }
-    button#saveBtn.active {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 16px;
       color: #fff;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.3s;
+    }
+    input[type="text"]:focus { border-color: var(--cyan); box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.1); }
+    
+    button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      color: #6a7c9c;
+      padding: 18px;
+      border-radius: 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: not-allowed;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    button.active {
+      background: var(--green);
+      color: #000;
+      border-color: var(--green);
       cursor: pointer;
-      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
     }
-    button#saveBtn.active:active {
-      transform: scale(0.98);
-    }
+    button.active:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0, 255, 157, 0.5); }
+    button.active:active { transform: translateY(1px); }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <div class="badge">AI Diagnostic Engine</div>
-    <h1>Markerless CVA</h1>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
 
-    <div class="upload-box">
-      <span style="font-size:1.2rem; display:block; margin-bottom:8px;">📸</span>
-      Tap to Capture or Upload Profile
+  <div class="glass-panel">
+    <div class="header">
+      <div class="badge">SYS. V 2.4 // ONLINE</div>
+      <h1>CVA Matrix</h1>
+    </div>
+
+    <div class="upload-zone" id="dropArea">
+      <span class="icon">⛶</span>
+      <span class="text">INITIALIZE SCAN (TAP TO UPLOAD)</span>
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
-    <div id="statusBanner"></div>
-    <canvas id="outputCanvas"></canvas>
+    <div id="hud-display">
+      <div class="data-card" id="dataCard">
+        <div class="data-label" id="sideLabel">Awaiting Data</div>
+        <div class="cva-value" id="cvaReadout">--°</div>
+      </div>
+      
+      <div class="canvas-container">
+        <canvas id="outputCanvas"></canvas>
+      </div>
+    </div>
 
-    <div class="form-group">
-      <input type="text" id="patientId" placeholder="Participant ID (e.g., Subj-001)">
-      <button id="saveBtn" disabled>Export CSV Record</button>
+    <div class="inputs">
+      <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
+      <button id="saveBtn" disabled>Export Telemetry</button>
     </div>
   </div>
 
@@ -183,7 +206,10 @@
     const fileInput = document.getElementById('fileInput');
     const canvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
-    const banner = document.getElementById('statusBanner');
+    const hud = document.getElementById('hud-display');
+    const sideLabel = document.getElementById('sideLabel');
+    const cvaReadout = document.getElementById('cvaReadout');
+    const dataCard = document.getElementById('dataCard');
     const saveBtn = document.getElementById('saveBtn');
     const patientIdInput = document.getElementById('patientId');
 
@@ -194,8 +220,10 @@
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
     pose.onResults((results) => {
-      canvas.style.display = 'block';
-      banner.style.display = 'block';
+      hud.style.display = 'flex';
+      hud.style.flexDirection = 'column';
+      hud.style.gap = '24px';
+      
       canvas.width = results.image.width;
       canvas.height = results.image.height;
       ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
@@ -208,7 +236,7 @@
         const isRight = (rightEar.visibility || 0) >= (leftEar.visibility || 0);
         const ear = isRight ? rightEar : leftEar;
         const shoulder = isRight ? rightShoulder : leftShoulder;
-        currentSide = isRight ? "Right" : "Left";
+        currentSide = isRight ? "RIGHT" : "LEFT";
 
         const ex = ear.x * canvas.width, ey = ear.y * canvas.height;
         const sx = shoulder.x * canvas.width, sy = shoulder.y * canvas.height;
@@ -217,46 +245,46 @@
         const dx = Math.abs(ex - sx);
         currentAngle = Math.round(Math.atan2(dy, dx) * (180 / Math.PI));
 
-        // Add Neon Glow to lines
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 15;
-
-        // Horizontal baseline reference
-        ctx.strokeStyle = '#06b6d4';
-        ctx.lineWidth = Math.max(3, canvas.width * 0.005);
-        ctx.setLineDash([12, 10]);
+        // High-Tech Canvas Drawing
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.lineWidth = Math.max(2, canvas.width * 0.005);
+        ctx.setLineDash([8, 8]);
         ctx.beginPath(); ctx.moveTo(sx - 200, sy); ctx.lineTo(sx + 200, sy); ctx.stroke();
         ctx.setLineDash([]);
 
-        // Tragus-to-shoulder vector
-        ctx.shadowColor = '#10b981';
-        ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = Math.max(5, canvas.width * 0.008);
+        ctx.shadowColor = '#00ff9d';
+        ctx.strokeStyle = '#00ff9d';
+        ctx.lineWidth = Math.max(4, canvas.width * 0.008);
         ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(sx, sy); ctx.stroke();
 
-        // Keypoints
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#ef4444';
-        const radius = Math.max(8, canvas.width * 0.015);
-        ctx.fillStyle = '#ef4444';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#fff';
+        const radius = Math.max(6, canvas.width * 0.015);
+        ctx.fillStyle = '#fff';
         ctx.beginPath(); ctx.arc(ex, ey, radius, 0, 2*Math.PI); ctx.fill();
         ctx.beginPath(); ctx.arc(sx, sy, radius, 0, 2*Math.PI); ctx.fill();
         
-        // Reset shadow
         ctx.shadowBlur = 0;
 
-        // Render massive CVA Number
-        banner.style.background = 'rgba(16, 185, 129, 0.05)';
-        banner.style.borderColor = 'rgba(16, 185, 129, 0.2)';
-        banner.innerHTML = `<span style="color:#94a3b8; font-weight:600;">Detected ${currentSide} Profile</span><span class="cva-number">${currentAngle}°</span>`;
+        // Update HUD
+        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE`;
+        sideLabel.style.color = '#8a9fc2';
+        cvaReadout.innerText = `${currentAngle}°`;
+        cvaReadout.style.color = '#00ff9d';
+        dataCard.style.borderTopColor = '#00ff9d';
 
         saveBtn.disabled = false;
         saveBtn.classList.add('active');
-        saveBtn.innerText = "Export CSV Record";
+        saveBtn.innerText = "Export Telemetry";
       } else {
-        banner.style.background = 'rgba(239, 68, 68, 0.05)';
-        banner.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-        banner.innerHTML = `<span style="color:#ef4444; font-weight:600;">⚠️ No landmarks detected.<br>Ensure full shoulder is visible.</span>`;
+        sideLabel.innerText = "SYSTEM ERROR";
+        sideLabel.style.color = '#ff0055';
+        cvaReadout.innerText = "ERR";
+        cvaReadout.style.color = '#ff0055';
+        dataCard.style.borderTopColor = '#ff0055';
+        
         saveBtn.disabled = true;
         saveBtn.classList.remove('active');
       }
@@ -265,10 +293,11 @@
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      banner.style.display = 'block';
-      banner.style.background = 'rgba(6, 182, 212, 0.05)';
-      banner.style.borderColor = 'rgba(6, 182, 212, 0.2)';
-      banner.innerHTML = `<span style="color:#06b6d4; font-weight:600;">Scanning Biomechanics...</span>`;
+      hud.style.display = 'flex';
+      hud.style.flexDirection = 'column';
+      hud.style.gap = '24px';
+      sideLabel.innerText = "CALCULATING MATRICES...";
+      cvaReadout.innerText = "---";
       saveBtn.disabled = true;
       saveBtn.classList.remove('active');
       const img = new Image();
@@ -278,8 +307,8 @@
 
     saveBtn.addEventListener('click', () => {
       if (currentAngle === null) return;
-      const pId = (patientIdInput.value.trim()) || "Anonymous";
-      const csv = `Patient_ID,Side,CVA_Angle,Timestamp\n"${pId}","${currentSide}","${currentAngle}","${new Date().toISOString()}"`;
+      const pId = (patientIdInput.value.trim()) || "ANON";
+      const csv = `Subject_ID,Profile_Side,CVA_Angle,Timestamp\n"${pId}","${currentSide}","${currentAngle}","${new Date().toISOString()}"`;
       const blob = new Blob([csv], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -287,7 +316,7 @@
       a.click();
 
       const originalText = saveBtn.innerText;
-      saveBtn.innerText = "✓ Saved Successfully";
+      saveBtn.innerText = "DATA SECURED";
       setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
     });
   </script>
