@@ -68,7 +68,7 @@
     
     .canvas-container { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; display: none; }
     #outputCanvas, #liveVideo { width: 100%; display: block; }
-    #liveVideo { display: none; } /* Hidden, we draw to canvas */
+    #liveVideo { display: none; }
 
     .metric-grid { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; text-align: center; }
     .metric-title { font-size: 0.7rem; color: #8a9fc2; font-weight: 700; }
@@ -87,7 +87,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 19.0 // OMNI-MATRIX</div>
+      <div class="badge">SYS. V 20.0 // OMNI-MATRIX + DETAILED PDF</div>
       <h1>POSTURE AI</h1>
     </div>
 
@@ -153,19 +153,17 @@
     const saveBtn = document.getElementById('saveBtn');
     const patientIdInput = document.getElementById('patientId');
 
-    let currentMode = 'SAGITTAL'; // or CORONAL
-    let currentInput = 'UPLOAD'; // or LIVE
+    let currentMode = 'SAGITTAL';
+    let currentInput = 'UPLOAD'; 
     let isLiveActive = false;
     let camera = null;
     
     let metrics = { m1: null, m2: null, side: null };
     let rawNodes = {};
 
-    // --- MediaPipe Initialization ---
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
-    // --- UI Toggles ---
     viewSagittal.onclick = () => { currentMode = 'SAGITTAL'; viewSagittal.classList.add('active'); viewCoronal.classList.remove('active'); updateLabels(); resetMetrics(); };
     viewCoronal.onclick = () => { currentMode = 'CORONAL'; viewCoronal.classList.add('active'); viewSagittal.classList.remove('active'); updateLabels(); resetMetrics(); };
     
@@ -183,11 +181,9 @@
 
     function updateLabels() {
       if(currentMode === 'SAGITTAL') {
-        lbl1.innerText = "SHA (HEAD POSTURE)";
-        lbl2.innerText = "CRA (HEAD TILT)";
+        lbl1.innerText = "SHA (HEAD POSTURE)"; lbl2.innerText = "CRA (HEAD TILT)";
       } else {
-        lbl1.innerText = "SLA (SHOULDER LEVEL)";
-        lbl2.innerText = "CTA (CORONAL TILT)";
+        lbl1.innerText = "SLA (SHOULDER LEVEL)"; lbl2.innerText = "CTA (CORONAL TILT)";
       }
     }
 
@@ -197,7 +193,6 @@
       metrics = { m1: null, m2: null, side: null };
     }
 
-    // --- Camera Logic ---
     async function startCamera() {
       if(!camera) {
         camera = new Camera(video, {
@@ -205,18 +200,16 @@
           width: 1280, height: 720, facingMode: "environment"
         });
       }
-      isLiveActive = true;
-      await camera.start();
+      isLiveActive = true; await camera.start();
     }
     function stopCamera() { isLiveActive = false; if(camera) camera.stop(); }
     
     freezeBtn.onclick = () => {
       isLiveActive = !isLiveActive;
       freezeBtn.innerText = isLiveActive ? "📸 FREEZE & ANALYZE FRAME" : "▶ RESUME LIVE FEED";
-      if(!isLiveActive) saveBtn.classList.add('active'); // Allow export when frozen
+      if(!isLiveActive && metrics.m1 !== null) saveBtn.classList.add('active'); 
     };
 
-    // --- Image Upload Logic ---
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -226,10 +219,8 @@
       img.src = URL.createObjectURL(file);
     });
 
-    // --- Core AI Logic ---
     pose.onResults((results) => {
-      canvas.width = results.image.width;
-      canvas.height = results.image.height;
+      canvas.width = results.image.width; canvas.height = results.image.height;
       ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
       if (results.poseLandmarks) {
@@ -238,7 +229,6 @@
         const radius = Math.max(5, canvas.width * 0.012);
         
         if (currentMode === 'SAGITTAL') {
-          // --- SAGITTAL MATH ---
           const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
           const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
           const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
@@ -251,58 +241,67 @@
           const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
           
           metrics.side = (eyeX < tragusX) ? "LEFT" : "RIGHT"; 
-          rawNodes = { a: {x: Math.round(acroX), y: Math.round(acroY)}, b: {x: Math.round(tragusX), y: Math.round(tragusY)} };
+          rawNodes = { acro: {x: Math.round(acroX), y: Math.round(acroY)}, tragus: {x: Math.round(tragusX), y: Math.round(tragusY)}, eye: {x: Math.round(eyeX), y: Math.round(eyeY)} };
 
-          metrics.m1 = Math.round(Math.atan2(acroY - tragusY, Math.abs(tragusX - acroX)) * (180 / Math.PI)); // SHA
-          metrics.m2 = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI)); // CRA
+          metrics.m1 = Math.round(Math.atan2(acroY - tragusY, Math.abs(tragusX - acroX)) * (180 / Math.PI)); 
+          metrics.m2 = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI));
 
-          // Draw Sagittal Vectors
           ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(tragusX, tragusY); ctx.stroke();
           ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
-          
           ctx.fillStyle = '#fff';
           [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
 
         } else {
-          // --- CORONAL (FRONTAL) MATH ---
           const rAcro = lm[12], lAcro = lm[11], rEye = lm[5], lEye = lm[2];
-          
           const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
           const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
           const reX = rEye.x * canvas.width, reY = rEye.y * canvas.height;
           const leX = lEye.x * canvas.width, leY = lEye.y * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { a: {x: Math.round(raX), y: Math.round(raY)}, b: {x: Math.round(laX), y: Math.round(laY)} };
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEye: {x: Math.round(reX), y: Math.round(reY)}, lEye: {x: Math.round(leX), y: Math.round(leY)} };
 
-          // Shoulder Level Angle (SLA)
           metrics.m1 = Math.round(Math.abs(Math.atan2(raY - laY, raX - laX) * (180 / Math.PI)));
-          // Coronal Head Tilt (CTA)
           metrics.m2 = Math.round(Math.abs(Math.atan2(reY - leY, reX - leX) * (180 / Math.PI)));
 
-          // Draw Coronal Vectors
           ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
           ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(leX, leY); ctx.lineTo(reX, reY); ctx.stroke();
-          
           ctx.fillStyle = '#fff';
           [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
         }
 
-        val1.innerText = `${metrics.m1}°`;
-        val2.innerText = `${metrics.m2}°`;
-        
+        val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}°`;
         if(!isLiveActive) { saveBtn.disabled = false; saveBtn.classList.add('active'); }
       }
     });
 
-    // --- Dynamic Multi-Mode PDF Generator ---
+    // --- REBUILT 2-PAGE OMNI-MATRIX PDF GENERATOR ---
     saveBtn.addEventListener('click', () => {
       if (metrics.m1 === null) return;
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const pId = (patientIdInput.value.trim()) || "ANON";
       const timeSafe = new Date().toISOString().replace(/[:.]/g, '-');
+      const dateStr = new Date().toLocaleString();
 
+      let severity = "NORMAL ALIGNMENT"; let sevColor = [0, 150, 50]; 
+      let m1Name = "", m2Name = "", norm1 = "", norm2 = "";
+
+      if(currentMode === 'SAGITTAL') {
+          m1Name = "Sagittal Head Angle (SHA)"; m2Name = "Cranial Angle (CRA)";
+          norm1 = "> 50.0° (Healthy Alignment)"; norm2 = "N/A (Dependent on gaze)";
+          if (metrics.m1 < 50) { severity = "MILD POSTURAL DEVIATION (FHP)"; sevColor = [200, 150, 0]; }
+          if (metrics.m1 < 45) { severity = "MODERATE POSTURAL DEVIATION (FHP)"; sevColor = [220, 100, 0]; }
+          if (metrics.m1 < 40) { severity = "SEVERE POSTURAL DEVIATION (FHP)"; sevColor = [200, 0, 0]; }
+      } else {
+          m1Name = "Shoulder Level Angle (SLA)"; m2Name = "Coronal Head Tilt (CTA)";
+          norm1 = "< 3.0° (Symmetrical)"; norm2 = "< 3.0° (Symmetrical)";
+          if (metrics.m1 >= 3 || metrics.m2 >= 3) { severity = "MILD ASYMMETRY DETECTED"; sevColor = [200, 150, 0]; }
+          if (metrics.m1 >= 5 || metrics.m2 >= 5) { severity = "MODERATE ASYMMETRY DETECTED"; sevColor = [220, 100, 0]; }
+          if (metrics.m1 >= 8 || metrics.m2 >= 8) { severity = "SEVERE ASYMMETRY DETECTED"; sevColor = [200, 0, 0]; }
+      }
+
+      // PAGE 1
       doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F');
       doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
 
@@ -311,33 +310,441 @@
       
       doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(80, 90, 100);
       doc.text(`Subject ID: ${pId}`, 20, 40);
-      doc.text(`Mode Validated: ${currentMode} (${metrics.side})`, 20, 46);
+      doc.text(`Timestamp: ${dateStr}`, 20, 46);
+      doc.text(`Calibration: ${currentMode} Profile (${metrics.side})`, 20, 52);
 
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdfWidth = 170; const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
-      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.5); doc.rect(19, 54, pdfWidth + 2, pdfHeight + 2);
-      doc.addImage(imgData, 'JPEG', 20, 55, pdfWidth, pdfHeight);
+      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.5); doc.rect(19, 59, pdfWidth + 2, pdfHeight + 2);
+      doc.addImage(imgData, 'JPEG', 20, 60, pdfWidth, pdfHeight);
 
-      const textY = 55 + pdfHeight + 15;
-      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-      doc.text("I. CLINICAL TELEMETRY", 20, textY);
-      doc.setDrawColor(0, 200, 200); doc.line(20, textY + 3, 190, textY + 3);
+      const textY = 60 + pdfHeight + 15;
+      doc.setFillColor(245, 245, 250); doc.rect(20, textY, 170, 16, 'F');
+      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text("PRIMARY CLINICAL INDICATION:", 25, textY + 11);
+      doc.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
+      doc.text(severity, 95, textY + 11);
 
-      doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.setTextColor(50, 60, 70);
+      // PAGE 2
+      doc.addPage();
+      doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
+      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+      doc.text("I. CLINICAL TELEMETRY & NORMATIVE DATA", 20, 30);
+      doc.setDrawColor(0, 200, 200); doc.setLineWidth(0.5); doc.line(20, 33, 190, 33);
+
+      doc.setFillColor(240, 245, 250); doc.rect(20, 40, 170, 10, 'F');
+      doc.setFontSize(10); doc.setTextColor(50, 60, 70);
+      doc.text("METRIC", 25, 47); doc.text("PATIENT VALUE", 95, 47); doc.text("NORMATIVE BASELINE", 140, 47);
+
+      doc.setFont("helvetica", "normal"); doc.text(m1Name, 25, 57);
+      doc.setFont("helvetica", "bold"); doc.text(`${metrics.m1}°`, 95, 57);
+      doc.setFont("helvetica", "normal"); doc.text(norm1, 140, 57);
+
+      doc.text(m2Name, 25, 67);
+      doc.setFont("helvetica", "bold"); doc.text(`${metrics.m2}°`, 95, 67);
+      doc.setFont("helvetica", "normal"); doc.text(norm2, 140, 67);
+      doc.setDrawColor(200, 200, 200); doc.line(20, 72, 190, 72);
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(30, 40, 50);
+      doc.text("II. BIOMECHANICAL ALGORITHM", 20, 95);
+      doc.setDrawColor(0, 200, 200); doc.line(20, 98, 190, 98);
+
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(50, 60, 70);
+      doc.text("Raw Canvas Pixel Coordinates:", 20, 110);
       
       if(currentMode === 'SAGITTAL') {
-        doc.text("Sagittal Head Angle (SHA):", 20, textY + 14);
-        doc.setFont("helvetica", "bold"); doc.text(`${metrics.m1}°`, 85, textY + 14);
-        doc.setFont("helvetica", "normal"); doc.text("Cranial Angle (CRA):", 20, textY + 22);
-        doc.setFont("helvetica", "bold"); doc.text(`${metrics.m2}°`, 85, textY + 22);
+          doc.text(`• Acromion Node (Shoulder): X: ${rawNodes.acro.x} px, Y: ${rawNodes.acro.y} px`, 25, 117);
+          doc.text(`• Tragus Node (Ear): X: ${rawNodes.tragus.x} px, Y: ${rawNodes.tragus.y} px`, 25, 124);
+          doc.text(`• Canthus Node (Eye): X: ${rawNodes.eye.x} px, Y: ${rawNodes.eye.y} px`, 25, 131);
       } else {
-        doc.text("Shoulder Level Angle (SLA):", 20, textY + 14);
-        doc.setFont("helvetica", "bold"); doc.text(`${metrics.m1}°`, 85, textY + 14);
-        doc.setFont("helvetica", "normal"); doc.text("Coronal Head Tilt (CTA):", 20, textY + 22);
-        doc.setFont("helvetica", "bold"); doc.text(`${metrics.m2}°`, 85, textY + 22);
+          doc.text(`• Right Acromion: X: ${rawNodes.rAcro.x} px, Y: ${rawNodes.rAcro.y} px`, 25, 117);
+          doc.text(`• Left Acromion: X: ${rawNodes.lAcro.x} px, Y: ${rawNodes.lAcro.y} px`, 25, 124);
+          doc.text(`• Right Eye: X: ${rawNodes.rEye.x} px, Y: ${rawNodes.rEye.y} px`, 25, 131);
+          doc.text(`• Left Eye: X: ${rawNodes.lEye.x} px, Y: ${rawNodes.lEye.y} px`, 25, 138);
       }
 
-      doc.save(`${currentMode}_Report_${pId}_${timeSafe}.pdf`);
+      doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+      doc.text("DISCLAIMER: This automated biometric report provides objective angular telemetry based on markerless AI estimation.", 20, 280);
+      doc.text("It is not a medical diagnosis. All findings should be clinically correlated by a licensed healthcare professional.", 20, 284);
+
+      doc.save(`Omni_Report_${currentMode}_${pId}_${timeSafe}.pdf`);
+      
+      const originalText = saveBtn.innerText; saveBtn.innerText = "PDF GENERATED";
+      setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
+    });
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clinical Posture AI | Omni-Matrix</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cyan: #00f0ff;
+      --green: #00ff9d;
+      --purple: #b500ff;
+      --dark: #050914;
+      --glass: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      padding: 10px;
+      min-height: 100vh;
+      background-color: var(--dark);
+      background-image: 
+        radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(0, 255, 157, 0.08), transparent 25%);
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    .glass-panel {
+      background: var(--glass);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 20px;
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .header { text-align: center; }
+    .header h1 { font-weight: 900; font-size: 1.8rem; margin: 0; background: linear-gradient(90deg, #fff, #8a9fc2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .badge { display: inline-block; font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--cyan); background: rgba(0, 240, 255, 0.1); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(0, 240, 255, 0.3); margin-bottom: 5px; }
+
+    .tabs { display: flex; gap: 10px; }
+    .tab-btn { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #8a9fc2; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; cursor: pointer; transition: 0.3s; }
+    .tab-btn.active { background: rgba(0, 240, 255, 0.1); border-color: var(--cyan); color: var(--cyan); }
+    
+    .view-toggles { display: flex; gap: 10px; }
+    .view-btn { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #8a9fc2; padding: 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: 0.3s; }
+    .view-btn.active { background: rgba(0, 255, 157, 0.1); border-color: var(--green); color: var(--green); }
+
+    .upload-zone { position: relative; border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 16px; padding: 15px; text-align: center; cursor: pointer; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    
+    .canvas-container { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; display: none; }
+    #outputCanvas, #liveVideo { width: 100%; display: block; }
+    #liveVideo { display: none; }
+
+    .metric-grid { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; text-align: center; }
+    .metric-title { font-size: 0.7rem; color: #8a9fc2; font-weight: 700; }
+    .metric-value { font-family: 'Space Mono', monospace; font-size: 2.2rem; font-weight: 700; color: #fff; }
+    #val-1 { color: var(--green); }
+    #val-2 { color: var(--cyan); }
+
+    input[type="text"], button.export-btn { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 15px; border-radius: 12px; color: #fff; width: 100%; font-family: 'Space Mono', monospace; font-size: 0.9rem; outline: none; }
+    button.export-btn { font-family: 'Outfit', sans-serif; font-weight: 700; text-transform: uppercase; cursor: not-allowed; color: #6a7c9c; transition: 0.3s; margin-top: 10px; }
+    button.export-btn.active { background: var(--green); color: #000; border-color: var(--green); cursor: pointer; }
+    
+    #freezeBtn { display: none; background: var(--purple); color: #fff; font-weight: bold; border: none; padding: 10px; border-radius: 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+
+  <div class="glass-panel">
+    <div class="header">
+      <div class="badge">SYS. V 20.0 // OMNI-MATRIX + DETAILED PDF</div>
+      <h1>POSTURE AI</h1>
+    </div>
+
+    <!-- Mode Toggles -->
+    <div class="tabs">
+      <button class="tab-btn active" id="tabUpload">IMAGE UPLOAD</button>
+      <button class="tab-btn" id="tabLive">LIVE SCANNER</button>
+    </div>
+    
+    <div class="view-toggles">
+      <button class="view-btn active" id="viewSagittal">SAGITTAL (SIDE)</button>
+      <button class="view-btn" id="viewCoronal">CORONAL (FRONT)</button>
+    </div>
+
+    <div class="upload-zone" id="dropArea">
+      <span style="font-size: 1.5rem; display:block; margin-bottom:5px;">⛶</span>
+      <span style="font-size: 0.8rem; font-weight: 700; color:#a1b0cb;">TAP TO LOAD IMAGE</span>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <button id="freezeBtn">📸 FREEZE & ANALYZE FRAME</button>
+
+    <div class="canvas-container" id="canvasWrap">
+      <video id="liveVideo" autoplay playsinline></video>
+      <canvas id="outputCanvas"></canvas>
+    </div>
+
+    <div class="metric-grid">
+      <div>
+        <div class="metric-title" id="lbl-1">SHA (HEAD POSTURE)</div>
+        <div class="metric-value" id="val-1">--°</div>
+      </div>
+      <div>
+        <div class="metric-title" id="lbl-2">CRA (HEAD TILT)</div>
+        <div class="metric-value" id="val-2">--°</div>
+      </div>
+    </div>
+
+    <div>
+      <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
+      <button id="saveBtn" class="export-btn" disabled>GENERATE CLINICAL PDF</button>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('liveVideo');
+    const canvasWrap = document.getElementById('canvasWrap');
+    const dropArea = document.getElementById('dropArea');
+    const freezeBtn = document.getElementById('freezeBtn');
+    
+    const tabUpload = document.getElementById('tabUpload');
+    const tabLive = document.getElementById('tabLive');
+    const viewSagittal = document.getElementById('viewSagittal');
+    const viewCoronal = document.getElementById('viewCoronal');
+    
+    const lbl1 = document.getElementById('lbl-1');
+    const lbl2 = document.getElementById('lbl-2');
+    const val1 = document.getElementById('val-1');
+    const val2 = document.getElementById('val-2');
+    const saveBtn = document.getElementById('saveBtn');
+    const patientIdInput = document.getElementById('patientId');
+
+    let currentMode = 'SAGITTAL';
+    let currentInput = 'UPLOAD'; 
+    let isLiveActive = false;
+    let camera = null;
+    
+    let metrics = { m1: null, m2: null, side: null };
+    let rawNodes = {};
+
+    const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+    viewSagittal.onclick = () => { currentMode = 'SAGITTAL'; viewSagittal.classList.add('active'); viewCoronal.classList.remove('active'); updateLabels(); resetMetrics(); };
+    viewCoronal.onclick = () => { currentMode = 'CORONAL'; viewCoronal.classList.add('active'); viewSagittal.classList.remove('active'); updateLabels(); resetMetrics(); };
+    
+    tabUpload.onclick = () => { 
+      currentInput = 'UPLOAD'; tabUpload.classList.add('active'); tabLive.classList.remove('active');
+      dropArea.style.display = 'block'; freezeBtn.style.display = 'none';
+      stopCamera();
+    };
+    
+    tabLive.onclick = async () => { 
+      currentInput = 'LIVE'; tabLive.classList.add('active'); tabUpload.classList.remove('active');
+      dropArea.style.display = 'none'; freezeBtn.style.display = 'block'; canvasWrap.style.display = 'block';
+      startCamera();
+    };
+
+    function updateLabels() {
+      if(currentMode === 'SAGITTAL') {
+        lbl1.innerText = "SHA (HEAD POSTURE)"; lbl2.innerText = "CRA (HEAD TILT)";
+      } else {
+        lbl1.innerText = "SLA (SHOULDER LEVEL)"; lbl2.innerText = "CTA (CORONAL TILT)";
+      }
+    }
+
+    function resetMetrics() {
+      val1.innerText = "--°"; val2.innerText = "--°";
+      saveBtn.disabled = true; saveBtn.classList.remove('active');
+      metrics = { m1: null, m2: null, side: null };
+    }
+
+    async function startCamera() {
+      if(!camera) {
+        camera = new Camera(video, {
+          onFrame: async () => { if(isLiveActive) await pose.send({image: video}); },
+          width: 1280, height: 720, facingMode: "environment"
+        });
+      }
+      isLiveActive = true; await camera.start();
+    }
+    function stopCamera() { isLiveActive = false; if(camera) camera.stop(); }
+    
+    freezeBtn.onclick = () => {
+      isLiveActive = !isLiveActive;
+      freezeBtn.innerText = isLiveActive ? "📸 FREEZE & ANALYZE FRAME" : "▶ RESUME LIVE FEED";
+      if(!isLiveActive && metrics.m1 !== null) saveBtn.classList.add('active'); 
+    };
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      canvasWrap.style.display = 'block';
+      const img = new Image();
+      img.onload = async () => { await pose.reset(); pose.send({ image: img }); };
+      img.src = URL.createObjectURL(file);
+    });
+
+    pose.onResults((results) => {
+      canvas.width = results.image.width; canvas.height = results.image.height;
+      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+      if (results.poseLandmarks) {
+        const lm = results.poseLandmarks;
+        ctx.lineWidth = Math.max(2, canvas.width * 0.005);
+        const radius = Math.max(5, canvas.width * 0.012);
+        
+        if (currentMode === 'SAGITTAL') {
+          const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
+          const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
+          const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
+          const ear = useRightSide ? rightEar : leftEar;
+          const shoulder = useRightSide ? rightShoulder : leftShoulder;
+          const eye = useRightSide ? rightEye : leftEye;
+
+          const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
+          const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
+          const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
+          
+          metrics.side = (eyeX < tragusX) ? "LEFT" : "RIGHT"; 
+          rawNodes = { acro: {x: Math.round(acroX), y: Math.round(acroY)}, tragus: {x: Math.round(tragusX), y: Math.round(tragusY)}, eye: {x: Math.round(eyeX), y: Math.round(eyeY)} };
+
+          metrics.m1 = Math.round(Math.atan2(acroY - tragusY, Math.abs(tragusX - acroX)) * (180 / Math.PI)); 
+          metrics.m2 = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI));
+
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(tragusX, tragusY); ctx.stroke();
+          ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
+          ctx.fillStyle = '#fff';
+          [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+
+        } else {
+          const rAcro = lm[12], lAcro = lm[11], rEye = lm[5], lEye = lm[2];
+          const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
+          const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
+          const reX = rEye.x * canvas.width, reY = rEye.y * canvas.height;
+          const leX = lEye.x * canvas.width, leY = lEye.y * canvas.height;
+
+          metrics.side = "FRONTAL";
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEye: {x: Math.round(reX), y: Math.round(reY)}, lEye: {x: Math.round(leX), y: Math.round(leY)} };
+
+          metrics.m1 = Math.round(Math.abs(Math.atan2(raY - laY, raX - laX) * (180 / Math.PI)));
+          metrics.m2 = Math.round(Math.abs(Math.atan2(reY - leY, reX - leX) * (180 / Math.PI)));
+
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
+          ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(leX, leY); ctx.lineTo(reX, reY); ctx.stroke();
+          ctx.fillStyle = '#fff';
+          [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+        }
+
+        val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}°`;
+        if(!isLiveActive) { saveBtn.disabled = false; saveBtn.classList.add('active'); }
+      }
+    });
+
+    // --- REBUILT 2-PAGE OMNI-MATRIX PDF GENERATOR ---
+    saveBtn.addEventListener('click', () => {
+      if (metrics.m1 === null) return;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const pId = (patientIdInput.value.trim()) || "ANON";
+      const timeSafe = new Date().toISOString().replace(/[:.]/g, '-');
+      const dateStr = new Date().toLocaleString();
+
+      let severity = "NORMAL ALIGNMENT"; let sevColor = [0, 150, 50]; 
+      let m1Name = "", m2Name = "", norm1 = "", norm2 = "";
+
+      if(currentMode === 'SAGITTAL') {
+          m1Name = "Sagittal Head Angle (SHA)"; m2Name = "Cranial Angle (CRA)";
+          norm1 = "> 50.0° (Healthy Alignment)"; norm2 = "N/A (Dependent on gaze)";
+          if (metrics.m1 < 50) { severity = "MILD POSTURAL DEVIATION (FHP)"; sevColor = [200, 150, 0]; }
+          if (metrics.m1 < 45) { severity = "MODERATE POSTURAL DEVIATION (FHP)"; sevColor = [220, 100, 0]; }
+          if (metrics.m1 < 40) { severity = "SEVERE POSTURAL DEVIATION (FHP)"; sevColor = [200, 0, 0]; }
+      } else {
+          m1Name = "Shoulder Level Angle (SLA)"; m2Name = "Coronal Head Tilt (CTA)";
+          norm1 = "< 3.0° (Symmetrical)"; norm2 = "< 3.0° (Symmetrical)";
+          if (metrics.m1 >= 3 || metrics.m2 >= 3) { severity = "MILD ASYMMETRY DETECTED"; sevColor = [200, 150, 0]; }
+          if (metrics.m1 >= 5 || metrics.m2 >= 5) { severity = "MODERATE ASYMMETRY DETECTED"; sevColor = [220, 100, 0]; }
+          if (metrics.m1 >= 8 || metrics.m2 >= 8) { severity = "SEVERE ASYMMETRY DETECTED"; sevColor = [200, 0, 0]; }
+      }
+
+      // PAGE 1
+      doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F');
+      doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
+
+      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
+      doc.text("OMNI-MATRIX CLINICAL REPORT", 20, 30);
+      
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(80, 90, 100);
+      doc.text(`Subject ID: ${pId}`, 20, 40);
+      doc.text(`Timestamp: ${dateStr}`, 20, 46);
+      doc.text(`Calibration: ${currentMode} Profile (${metrics.side})`, 20, 52);
+
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdfWidth = 170; const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
+      doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.5); doc.rect(19, 59, pdfWidth + 2, pdfHeight + 2);
+      doc.addImage(imgData, 'JPEG', 20, 60, pdfWidth, pdfHeight);
+
+      const textY = 60 + pdfHeight + 15;
+      doc.setFillColor(245, 245, 250); doc.rect(20, textY, 170, 16, 'F');
+      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text("PRIMARY CLINICAL INDICATION:", 25, textY + 11);
+      doc.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
+      doc.text(severity, 95, textY + 11);
+
+      // PAGE 2
+      doc.addPage();
+      doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
+      doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+      doc.text("I. CLINICAL TELEMETRY & NORMATIVE DATA", 20, 30);
+      doc.setDrawColor(0, 200, 200); doc.setLineWidth(0.5); doc.line(20, 33, 190, 33);
+
+      doc.setFillColor(240, 245, 250); doc.rect(20, 40, 170, 10, 'F');
+      doc.setFontSize(10); doc.setTextColor(50, 60, 70);
+      doc.text("METRIC", 25, 47); doc.text("PATIENT VALUE", 95, 47); doc.text("NORMATIVE BASELINE", 140, 47);
+
+      doc.setFont("helvetica", "normal"); doc.text(m1Name, 25, 57);
+      doc.setFont("helvetica", "bold"); doc.text(`${metrics.m1}°`, 95, 57);
+      doc.setFont("helvetica", "normal"); doc.text(norm1, 140, 57);
+
+      doc.text(m2Name, 25, 67);
+      doc.setFont("helvetica", "bold"); doc.text(`${metrics.m2}°`, 95, 67);
+      doc.setFont("helvetica", "normal"); doc.text(norm2, 140, 67);
+      doc.setDrawColor(200, 200, 200); doc.line(20, 72, 190, 72);
+
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(30, 40, 50);
+      doc.text("II. BIOMECHANICAL ALGORITHM", 20, 95);
+      doc.setDrawColor(0, 200, 200); doc.line(20, 98, 190, 98);
+
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(50, 60, 70);
+      doc.text("Raw Canvas Pixel Coordinates:", 20, 110);
+      
+      if(currentMode === 'SAGITTAL') {
+          doc.text(`• Acromion Node (Shoulder): X: ${rawNodes.acro.x} px, Y: ${rawNodes.acro.y} px`, 25, 117);
+          doc.text(`• Tragus Node (Ear): X: ${rawNodes.tragus.x} px, Y: ${rawNodes.tragus.y} px`, 25, 124);
+          doc.text(`• Canthus Node (Eye): X: ${rawNodes.eye.x} px, Y: ${rawNodes.eye.y} px`, 25, 131);
+      } else {
+          doc.text(`• Right Acromion: X: ${rawNodes.rAcro.x} px, Y: ${rawNodes.rAcro.y} px`, 25, 117);
+          doc.text(`• Left Acromion: X: ${rawNodes.lAcro.x} px, Y: ${rawNodes.lAcro.y} px`, 25, 124);
+          doc.text(`• Right Eye: X: ${rawNodes.rEye.x} px, Y: ${rawNodes.rEye.y} px`, 25, 131);
+          doc.text(`• Left Eye: X: ${rawNodes.lEye.x} px, Y: ${rawNodes.lEye.y} px`, 25, 138);
+      }
+
+      doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+      doc.text("DISCLAIMER: This automated biometric report provides objective angular telemetry based on markerless AI estimation.", 20, 280);
+      doc.text("It is not a medical diagnosis. All findings should be clinically correlated by a licensed healthcare professional.", 20, 284);
+
+      doc.save(`Omni_Report_${currentMode}_${pId}_${timeSafe}.pdf`);
       
       const originalText = saveBtn.innerText; saveBtn.innerText = "PDF GENERATED";
       setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
