@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 7.0 // FINAL REFINEMENT</div>
+      <div class="badge">SYS. V 8.0 // HARD RESET LOCK</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -238,7 +238,6 @@
         const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
         const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
 
-        // Ensure we grab the most visible side
         const rightEarVis = rightEar.visibility || 0;
         const leftEarVis = leftEar.visibility || 0;
         const useRightSide = rightEarVis > leftEarVis;
@@ -251,24 +250,23 @@
         const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
         let sx = shoulder.x * canvas.width, sy = shoulder.y * canvas.height;
         
-        // Strict anatomical direction check based on coordinates, not MediaPipe's guess
         const isFacingLeft = eyeX < eX;
         currentSide = isFacingLeft ? "LEFT" : "RIGHT"; 
         
         const headScale = Math.hypot(eyeX - eX, eyeY - eY); 
 
-        // --- DYNAMIC TRAGUS TRIANGULATION ---
-        // Nudged down to a tight 5% forward shift
-        let ex = eX + ((eyeX - eX) * 0.05);
-        let ey = eY + ((eyeY - eY) * 0.05);
+        // --- TRAGUS FIX: Raw Landmark ---
+        // MediaPipe's ear landmark naturally targets the Tragus/Ear Canal. 
+        let ex = eX;
+        let ey = eY;
 
-        // --- TRUE C7 ANATOMICAL TRIANGULATION ---
-        sy = sy - (headScale * 0.60); // Shift UP 60% of ear-to-eye distance
+        // --- C7 FIX: Micro-Adjustment ---
+        sy = sy - (headScale * 0.25); // Reduced from 60% to 25% up
 
         if (isFacingLeft) {
-          sx = sx + (headScale * 0.35); // Shift spine RIGHT (+X)
+          sx = sx + (headScale * 0.10); // Reduced from 35% to 10% back
         } else {
-          sx = sx - (headScale * 0.35); // Shift spine LEFT (-X)
+          sx = sx - (headScale * 0.10); 
         }
         // ----------------------------------------
 
@@ -276,7 +274,6 @@
         const dx = Math.abs(ex - sx);
         currentAngle = Math.round(Math.atan2(dy, dx) * (180 / Math.PI));
 
-        // High-Tech Canvas Drawing
         ctx.shadowColor = '#00f0ff';
         ctx.shadowBlur = 10;
         ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
@@ -299,8 +296,7 @@
         
         ctx.shadowBlur = 0;
 
-        // Update HUD
-        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE (REFINED)`;
+        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE`;
         sideLabel.style.color = '#8a9fc2';
         cvaReadout.innerText = `${currentAngle}°`;
         cvaReadout.style.color = '#00ff9d';
@@ -321,7 +317,7 @@
       }
     });
 
-    fileInput.addEventListener('change', (e) => {
+    fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       hud.style.display = 'flex';
@@ -331,8 +327,13 @@
       cvaReadout.innerText = "---";
       saveBtn.disabled = true;
       saveBtn.classList.remove('active');
+      
       const img = new Image();
-      img.onload = () => pose.send({ image: img });
+      img.onload = async () => {
+        // HARD RESET: Wipes MediaPipe's temporal cache before processing static images
+        await pose.reset();
+        pose.send({ image: img });
+      };
       img.src = URL.createObjectURL(file);
     });
 
@@ -353,4 +354,3 @@
   </script>
 </body>
 </html>
-
