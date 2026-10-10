@@ -4,8 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clinical Posture AI | Sagittal Pipeline</title>
+  
+  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <!-- jsPDF for Clinical Reporting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -180,13 +185,13 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 13.0 // MARKERLESS GOLD STANDARD</div>
+      <div class="badge">SYS. V 14.0 // CLINICAL PDF GENERATOR</div>
       <h1>SAGITTAL MATRIX</h1>
     </div>
 
     <div class="upload-zone" id="dropArea">
       <span class="icon">⛶</span>
-      <span class="text">INITIALIZE MULTI-METRIC SCAN</span>
+      <span class="text">INITIALIZE DIAGNOSTIC SCAN</span>
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
@@ -212,7 +217,7 @@
 
     <div class="inputs">
       <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
-      <button id="saveBtn" disabled>Export Full Telemetry</button>
+      <button id="saveBtn" disabled>Generate Clinical PDF</button>
     </div>
   </div>
 
@@ -236,7 +241,7 @@
       modelComplexity: 1,         
       smoothLandmarks: false,     
       enableSegmentation: false, 
-      minDetectionConfidence: 0.2, // Severely lowered to catch extreme tight/head-only crops
+      minDetectionConfidence: 0.2, 
       minTrackingConfidence: 0.2
     });
 
@@ -260,7 +265,7 @@
         const shoulder = useRightSide ? rightShoulder : leftShoulder;
         const eye = useRightSide ? rightEye : leftEye;
 
-        // PURE DIRECT MAPPING - ZERO GUESSWORK
+        // PURE DIRECT MAPPING 
         const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
         const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
         const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
@@ -268,38 +273,31 @@
         const isFacingLeft = eyeX < tragusX;
         metrics.side = isFacingLeft ? "LEFT" : "RIGHT"; 
 
-        // --- THE BIG TWO CLINICAL MARKERLESS METRICS ---
-        
-        // 1. SHA (Sagittal Head Angle): Acromion to Tragus
+        // --- SHA & CRA CALCULATION ---
         const shaDx = Math.abs(tragusX - acroX);
         const shaDy = acroY - tragusY;
         metrics.sha = Math.round(Math.atan2(shaDy, shaDx) * (180 / Math.PI));
         
-        // 2. CRA (Cranial Angle): Tragus to Eye
         const craDx = Math.abs(eyeX - tragusX);
         const craDy = tragusY - eyeY;
         metrics.cra = Math.round(Math.atan2(craDy, craDx) * (180 / Math.PI));
 
-        // --- HIGH-TECH CANVAS DRAWING ---
+        // --- CANVAS OVERLAY DRAWING ---
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
 
-        // Draw Acromion Horizontal Baseline (Dashed)
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.setLineDash([8, 8]);
         ctx.beginPath(); ctx.moveTo(acroX - 150, acroY); ctx.lineTo(acroX + 150, acroY); ctx.stroke();
         ctx.setLineDash([]);
 
-        // CRA Vector (Cyan: Tragus to Eye)
         ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 10; ctx.strokeStyle = '#00f0ff';
         ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
 
-        // SHA Vector (Green: Acromion to Tragus)
         ctx.shadowColor = '#00ff9d'; ctx.shadowBlur = 12; ctx.strokeStyle = '#00ff9d';
         ctx.lineWidth = Math.max(4, canvas.width * 0.008);
         ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(tragusX, tragusY); ctx.stroke();
 
-        // Plot Absolute Nodes (Zero Floating)
         ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff';
         [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => {
           ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill();
@@ -307,7 +305,7 @@
         ctx.shadowBlur = 0;
 
         // --- UPDATE HUD ---
-        sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE // ACROMION BASE`;
+        sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE`;
         sideLabel.style.color = '#8a9fc2';
         
         valSHA.innerText = `${metrics.sha}°`;
@@ -345,18 +343,58 @@
       img.src = URL.createObjectURL(file);
     });
 
+    // --- PHASE 1: AUTOMATED PDF GENERATION ---
     saveBtn.addEventListener('click', () => {
       if (metrics.sha === null) return;
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
       const pId = (patientIdInput.value.trim()) || "ANON";
-      const csv = `Subject_ID,Profile_Side,SHA_Angle,CRA_Angle,Timestamp\n"${pId}","${metrics.side}","${metrics.sha}","${metrics.cra}","${new Date().toISOString()}"`;
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `SAGITTAL_REPORT_${pId}.csv`;
-      a.click();
+      const dateStr = new Date().toLocaleString();
+
+      // Clinical Diagnosis Logic
+      let severity = "Normal Alignment";
+      if (metrics.sha < 50) severity = "Mild Forward Head Posture (FHP)";
+      if (metrics.sha < 45) severity = "Moderate Forward Head Posture (FHP)";
+      if (metrics.sha < 40) severity = "Severe Forward Head Posture (FHP)";
+
+      // PDF Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text("Automated Postural Analysis Report", 20, 20);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      doc.text(`Subject ID: ${pId}`, 20, 30);
+      doc.text(`Timestamp: ${dateStr}`, 20, 37);
+      doc.text(`Profile Validated: ${metrics.side} Sagittal`, 20, 44);
+
+      // Embed the Canvas Image with Overlays
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdfWidth = 170; // mm
+      const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
+      
+      doc.addImage(imgData, 'JPEG', 20, 55, pdfWidth, pdfHeight);
+
+      // Diagnostic Metrics Section
+      const textY = 55 + pdfHeight + 15;
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Clinical Matrices", 20, textY);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      doc.text(`Sagittal Head Angle (SHA): ${metrics.sha}° (Normative: > 50°)`, 20, textY + 10);
+      doc.text(`Cranial Angle (CRA): ${metrics.cra}°`, 20, textY + 17);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text(`Diagnostic Status: ${severity}`, 20, textY + 27);
+
+      doc.save(`Posture_Report_${pId}.pdf`);
 
       const originalText = saveBtn.innerText;
-      saveBtn.innerText = "TELEMETRY SECURED";
+      saveBtn.innerText = "PDF GENERATED";
       setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
     });
   </script>
