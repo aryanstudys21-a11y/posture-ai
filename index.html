@@ -189,9 +189,9 @@
 
     <div class="upload-zone" id="dropArea">
       <span class="icon">⛶</span>
-      <span class="text">TAP TO OPEN REAR CAMERA</span>
-      <!-- FIX: capture="environment" added for direct Android Rear-Camera access -->
-      <input type="file" id="fileInput" accept="image/*" capture="environment">
+      <span class="text">INITIALIZE DIAGNOSTIC SCAN</span>
+      <!-- Restored so Android offers Gallery or Camera choice -->
+      <input type="file" id="fileInput" accept="image/*">
     </div>
 
     <div id="hud-display">
@@ -353,7 +353,6 @@
       const pId = (patientIdInput.value.trim()) || "ANON";
       const dateStr = new Date().toLocaleString();
       
-      // FIX: Clean filename string for OS compatibility
       const timeSafe = new Date().toISOString().replace(/[:.]/g, '-');
 
       let severity = "NORMAL ALIGNMENT";
