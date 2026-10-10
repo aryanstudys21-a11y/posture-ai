@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 4.0 // FINAL CALIBRATION</div>
+      <div class="badge">SYS. V 4.2 // FINAL CALIBRATION</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -245,19 +245,19 @@
         // --- TRAGUS CALIBRATION OFFSET ---
         // Right Profile = Facing Left on screen. Face is on the left (-X).
         if (currentSide === "RIGHT") {
-          ex = ex - (neckDist * 0.08); // Shift LEFT (forward toward face)
+          ex = ex - (neckDist * 0.08); 
         } else {
-          ex = ex + (neckDist * 0.08); // Shift RIGHT (forward toward face)
+          ex = ex + (neckDist * 0.08); 
         }
 
         // --- C7 CALIBRATION OFFSET ---
-        sy = sy - (neckDist * 0.15); // Shift UP 15%
+        sy = sy - (neckDist * 0.40); // Shift UP 40%
 
         // Right Profile = Spine is on the right (+X).
         if (currentSide === "RIGHT") {
-          sx = sx + (neckDist * 0.25); // Shift RIGHT (backward toward spine)
+          sx = sx + (neckDist * 0.10); // Shift RIGHT (backward toward spine) 10%
         } else {
-          sx = sx - (neckDist * 0.25); // Shift LEFT (backward toward spine)
+          sx = sx - (neckDist * 0.10); // Shift LEFT (backward toward spine) 10%
         }
         // ----------------------------------------
 
