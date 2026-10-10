@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 10.0 // CLINICAL LOCK</div>
+      <div class="badge">SYS. V 11.0 // BONE TARGETING</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -259,14 +259,15 @@
         let ex = eX;
         let ey = eY;
 
-        // --- C7 FIX: The Clinical Lock ---
-        // Launch straight up from the acromion to the neck base, then a tiny nudge back to the spinous process.
-        sy = sy - (headScale * 0.30); 
+        // --- C7 FIX: BONE TARGETING ---
+        // Eye-to-Ear distance is physically tiny. To bridge the gap from the acromion 
+        // to the C7 spine, we use massive multipliers to literally jump across the back.
+        sy = sy - (headScale * 1.20); // 120% jump UP to the base of the neck
 
         if (isFacingLeft) {
-          sx = sx + (headScale * 0.12); 
+          sx = sx + (headScale * 0.60); // 60% jump BACK to the spine
         } else {
-          sx = sx - (headScale * 0.12); 
+          sx = sx - (headScale * 0.60); // 60% jump BACK to the spine
         }
         // ----------------------------------------
 
@@ -330,7 +331,7 @@
       
       const img = new Image();
       img.onload = async () => {
-        await pose.reset(); // Pure, sterile calculation every time
+        await pose.reset();
         pose.send({ image: img });
       };
       img.src = URL.createObjectURL(file);
