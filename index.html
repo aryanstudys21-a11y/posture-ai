@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 8.0 // HARD RESET LOCK</div>
+      <div class="badge">SYS. V 9.0 // OPTIMIZED C7 LOCK</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -256,17 +256,16 @@
         const headScale = Math.hypot(eyeX - eX, eyeY - eY); 
 
         // --- TRAGUS FIX: Raw Landmark ---
-        // MediaPipe's ear landmark naturally targets the Tragus/Ear Canal. 
         let ex = eX;
         let ey = eY;
 
-        // --- C7 FIX: Micro-Adjustment ---
-        sy = sy - (headScale * 0.25); // Reduced from 60% to 25% up
+        // --- C7 FIX: Final Optimized Adjustment ---
+        sy = sy - (headScale * 0.20); // Shift UP slightly less to hit the C7 bump
 
         if (isFacingLeft) {
-          sx = sx + (headScale * 0.10); // Reduced from 35% to 10% back
+          sx = sx + (headScale * 0.30); // Shift backward towards spine
         } else {
-          sx = sx - (headScale * 0.10); 
+          sx = sx - (headScale * 0.30); // Shift backward towards spine
         }
         // ----------------------------------------
 
@@ -330,8 +329,7 @@
       
       const img = new Image();
       img.onload = async () => {
-        // HARD RESET: Wipes MediaPipe's temporal cache before processing static images
-        await pose.reset();
+        await pose.reset(); // Pure, sterile calculation every time
         pose.send({ image: img });
       };
       img.src = URL.createObjectURL(file);
