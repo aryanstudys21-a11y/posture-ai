@@ -11,7 +11,6 @@
     :root {
       --cyan: #00f0ff;
       --green: #00ff9d;
-      --purple: #b500ff;
       --dark: #050914;
       --glass: rgba(255, 255, 255, 0.03);
       --glass-border: rgba(255, 255, 255, 0.08);
@@ -120,13 +119,12 @@
     .metric-title { font-size: 0.8rem; color: #6a7c9c; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; }
     .metric-value {
       font-family: 'Space Mono', monospace;
-      font-size: 2.5rem;
+      font-size: 3rem;
       font-weight: 700;
       line-height: 1;
     }
-    #val-cva { color: var(--green); text-shadow: 0 0 20px rgba(0, 255, 157, 0.4); }
+    #val-sha { color: var(--green); text-shadow: 0 0 20px rgba(0, 255, 157, 0.4); }
     #val-cra { color: var(--cyan); text-shadow: 0 0 20px rgba(0, 240, 255, 0.4); }
-    #val-fsa { color: var(--purple); text-shadow: 0 0 20px rgba(181, 0, 255, 0.4); }
 
     .canvas-container { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     #outputCanvas { width: 100%; display: block; }
@@ -182,8 +180,8 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 12.0 // FULL SAGITTAL PIPELINE</div>
-      <h1>CVA Matrix</h1>
+      <div class="badge">SYS. V 13.0 // MARKERLESS GOLD STANDARD</div>
+      <h1>SAGITTAL MATRIX</h1>
     </div>
 
     <div class="upload-zone" id="dropArea">
@@ -197,16 +195,12 @@
         <div class="data-label" id="sideLabel">Awaiting Data</div>
         <div class="metric-grid">
           <div>
-            <div class="metric-title">CVA</div>
-            <div class="metric-value" id="val-cva">--°</div>
+            <div class="metric-title">SHA (HEAD POSTURE)</div>
+            <div class="metric-value" id="val-sha">--°</div>
           </div>
           <div>
-            <div class="metric-title">CRA</div>
+            <div class="metric-title">CRA (HEAD TILT)</div>
             <div class="metric-value" id="val-cra">--°</div>
-          </div>
-          <div>
-            <div class="metric-title">FSA</div>
-            <div class="metric-value" id="val-fsa">--°</div>
           </div>
         </div>
       </div>
@@ -228,14 +222,13 @@
     const ctx = canvas.getContext('2d');
     const hud = document.getElementById('hud-display');
     const sideLabel = document.getElementById('sideLabel');
-    const valCVA = document.getElementById('val-cva');
+    const valSHA = document.getElementById('val-sha');
     const valCRA = document.getElementById('val-cra');
-    const valFSA = document.getElementById('val-fsa');
     const dataCard = document.getElementById('dataCard');
     const saveBtn = document.getElementById('saveBtn');
     const patientIdInput = document.getElementById('patientId');
 
-    let metrics = { cva: null, cra: null, fsa: null, side: null };
+    let metrics = { sha: null, cra: null, side: null };
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     
@@ -243,8 +236,8 @@
       modelComplexity: 1,         
       smoothLandmarks: false,     
       enableSegmentation: false, 
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      minDetectionConfidence: 0.2, // Severely lowered to catch extreme tight/head-only crops
+      minTrackingConfidence: 0.2
     });
 
     pose.onResults((results) => {
@@ -267,66 +260,58 @@
         const shoulder = useRightSide ? rightShoulder : leftShoulder;
         const eye = useRightSide ? rightEye : leftEye;
 
+        // PURE DIRECT MAPPING - ZERO GUESSWORK
         const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
         const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
         const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
         
         const isFacingLeft = eyeX < tragusX;
         metrics.side = isFacingLeft ? "LEFT" : "RIGHT"; 
-        
-        const headScale = Math.hypot(eyeX - tragusX, eyeY - tragusY); 
 
-        // CLINICAL C7 BONE TARGETING
-        const c7Y = acroY - (headScale * 1.20); 
-        const c7X = isFacingLeft ? acroX + (headScale * 0.60) : acroX - (headScale * 0.60); 
-
-        // --- MATH: CALCULATE THE BIG THREE ---
-        // 1. CVA: C7 to Tragus (Forward Head)
-        metrics.cva = Math.round(Math.atan2(c7Y - tragusY, Math.abs(tragusX - c7X)) * (180 / Math.PI));
+        // --- THE BIG TWO CLINICAL MARKERLESS METRICS ---
         
-        // 2. CRA: Tragus to Eye (Head Tilt)
-        metrics.cra = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI));
+        // 1. SHA (Sagittal Head Angle): Acromion to Tragus
+        const shaDx = Math.abs(tragusX - acroX);
+        const shaDy = acroY - tragusY;
+        metrics.sha = Math.round(Math.atan2(shaDy, shaDx) * (180 / Math.PI));
         
-        // 3. FSA: C7 to Acromion (Shoulder Protraction)
-        metrics.fsa = Math.round(Math.atan2(acroY - c7Y, Math.abs(acroX - c7X)) * (180 / Math.PI));
+        // 2. CRA (Cranial Angle): Tragus to Eye
+        const craDx = Math.abs(eyeX - tragusX);
+        const craDy = tragusY - eyeY;
+        metrics.cra = Math.round(Math.atan2(craDy, craDx) * (180 / Math.PI));
 
         // --- HIGH-TECH CANVAS DRAWING ---
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
 
-        // Draw C7 Horizontal Baseline (Dashed)
+        // Draw Acromion Horizontal Baseline (Dashed)
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.setLineDash([8, 8]);
-        ctx.beginPath(); ctx.moveTo(c7X - 150, c7Y); ctx.lineTo(c7X + 150, c7Y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(acroX - 150, acroY); ctx.lineTo(acroX + 150, acroY); ctx.stroke();
         ctx.setLineDash([]);
-
-        // FSA Vector (Purple: C7 to Acromion)
-        ctx.shadowColor = '#b500ff'; ctx.shadowBlur = 10; ctx.strokeStyle = '#b500ff';
-        ctx.beginPath(); ctx.moveTo(c7X, c7Y); ctx.lineTo(acroX, acroY); ctx.stroke();
 
         // CRA Vector (Cyan: Tragus to Eye)
         ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 10; ctx.strokeStyle = '#00f0ff';
         ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
 
-        // CVA Vector (Green: C7 to Tragus)
+        // SHA Vector (Green: Acromion to Tragus)
         ctx.shadowColor = '#00ff9d'; ctx.shadowBlur = 12; ctx.strokeStyle = '#00ff9d';
         ctx.lineWidth = Math.max(4, canvas.width * 0.008);
-        ctx.beginPath(); ctx.moveTo(c7X, c7Y); ctx.lineTo(tragusX, tragusY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(tragusX, tragusY); ctx.stroke();
 
-        // Plot Nodes
+        // Plot Absolute Nodes (Zero Floating)
         ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff';
-        [ {x:c7X, y:c7Y}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY}, {x:acroX, y:acroY} ].forEach(pt => {
+        [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => {
           ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill();
         });
         ctx.shadowBlur = 0;
 
         // --- UPDATE HUD ---
-        sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE // FULL SAGITTAL`;
+        sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE // ACROMION BASE`;
         sideLabel.style.color = '#8a9fc2';
         
-        valCVA.innerText = `${metrics.cva}°`;
+        valSHA.innerText = `${metrics.sha}°`;
         valCRA.innerText = `${metrics.cra}°`;
-        valFSA.innerText = `${metrics.fsa}°`;
         dataCard.style.borderTopColor = '#00ff9d';
 
         saveBtn.disabled = false;
@@ -334,7 +319,7 @@
       } else {
         sideLabel.innerText = "SYSTEM ERROR: NO SUBJECT DETECTED";
         sideLabel.style.color = '#ff0055';
-        valCVA.innerText = "ERR"; valCRA.innerText = "ERR"; valFSA.innerText = "ERR";
+        valSHA.innerText = "ERR"; valCRA.innerText = "ERR";
         dataCard.style.borderTopColor = '#ff0055';
         saveBtn.disabled = true;
         saveBtn.classList.remove('active');
@@ -348,7 +333,7 @@
       hud.style.flexDirection = 'column';
       hud.style.gap = '24px';
       sideLabel.innerText = "CALCULATING MATRICES...";
-      valCVA.innerText = "--"; valCRA.innerText = "--"; valFSA.innerText = "--";
+      valSHA.innerText = "--"; valCRA.innerText = "--"; 
       saveBtn.disabled = true;
       saveBtn.classList.remove('active');
       
@@ -361,10 +346,9 @@
     });
 
     saveBtn.addEventListener('click', () => {
-      if (metrics.cva === null) return;
+      if (metrics.sha === null) return;
       const pId = (patientIdInput.value.trim()) || "ANON";
-      // Upgraded CSV Exporter
-      const csv = `Subject_ID,Profile_Side,CVA_Angle,CRA_Angle,FSA_Angle,Timestamp\n"${pId}","${metrics.side}","${metrics.cva}","${metrics.cra}","${metrics.fsa}","${new Date().toISOString()}"`;
+      const csv = `Subject_ID,Profile_Side,SHA_Angle,CRA_Angle,Timestamp\n"${pId}","${metrics.side}","${metrics.sha}","${metrics.cra}","${new Date().toISOString()}"`;
       const blob = new Blob([csv], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -378,4 +362,3 @@
   </script>
 </body>
 </html>
-
