@@ -183,7 +183,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 17.0 // PRINTER-FRIENDLY PDF</div>
+      <div class="badge">SYS. V 18.0 // TWO-PAGE CLINICAL PDF</div>
       <h1>SAGITTAL MATRIX</h1>
     </div>
 
@@ -215,7 +215,7 @@
 
     <div class="inputs">
       <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
-      <button id="saveBtn" disabled>Generate Clinical PDF</button>
+      <button id="saveBtn" disabled>Generate Full PDF Report</button>
     </div>
   </div>
 
@@ -233,6 +233,7 @@
 
     let metrics = { sha: null, cra: null, side: null };
     let rawNodes = { acro: {}, tragus: {}, eye: {} };
+    let deltas = { shaDx: 0, shaDy: 0, craDx: 0, craDy: 0 };
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     
@@ -275,13 +276,13 @@
         const isFacingLeft = eyeX < tragusX;
         metrics.side = isFacingLeft ? "LEFT" : "RIGHT"; 
 
-        const shaDx = Math.abs(tragusX - acroX);
-        const shaDy = acroY - tragusY;
-        metrics.sha = Math.round(Math.atan2(shaDy, shaDx) * (180 / Math.PI));
+        deltas.shaDx = Math.abs(tragusX - acroX);
+        deltas.shaDy = acroY - tragusY;
+        metrics.sha = Math.round(Math.atan2(deltas.shaDy, deltas.shaDx) * (180 / Math.PI));
         
-        const craDx = Math.abs(eyeX - tragusX);
-        const craDy = tragusY - eyeY;
-        metrics.cra = Math.round(Math.atan2(craDy, craDx) * (180 / Math.PI));
+        deltas.craDx = Math.abs(eyeX - tragusX);
+        deltas.craDy = tragusY - eyeY;
+        metrics.cra = Math.round(Math.atan2(deltas.craDy, deltas.craDx) * (180 / Math.PI));
 
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
@@ -341,7 +342,7 @@
       img.src = URL.createObjectURL(file);
     });
 
-    // --- REBUILT LIGHT-MODE CLINICAL PDF EXPORT ---
+    // --- REBUILT TWO-PAGE CLINICAL PDF EXPORT ---
     saveBtn.addEventListener('click', () => {
       if (metrics.sha === null) return;
       
@@ -353,26 +354,24 @@
 
       // Clinical Diagnostics
       let severity = "NORMAL ALIGNMENT";
-      let sevColor = [0, 150, 50]; // Clinical Green
+      let sevColor = [0, 150, 50]; 
       if (metrics.sha < 50) { severity = "MILD POSTURAL DEVIATION (FHP)"; sevColor = [200, 150, 0]; }
       if (metrics.sha < 45) { severity = "MODERATE POSTURAL DEVIATION (FHP)"; sevColor = [220, 100, 0]; }
       if (metrics.sha < 40) { severity = "SEVERE POSTURAL DEVIATION (FHP)"; sevColor = [200, 0, 0]; }
 
-      // 1. Clean White Background (Fixes invisible text bug)
+      // ==========================
+      // PAGE 1: VISUAL & DIAGNOSIS
+      // ==========================
       doc.setFillColor(255, 255, 255);
       doc.rect(0, 0, 210, 297, 'F');
-
-      // 2. Cyan Header Bar
       doc.setFillColor(0, 200, 200);
       doc.rect(0, 0, 210, 15, 'F');
 
-      // 3. Document Title
       doc.setTextColor(30, 40, 50);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(22);
       doc.text("OBJECTIVE POSTURAL ANALYSIS", 20, 30);
       
-      // Patient Info Block
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(80, 90, 100);
@@ -380,7 +379,6 @@
       doc.text(`Timestamp: ${dateStr}`, 20, 46);
       doc.text(`Calibration: ${metrics.side} Sagittal (Markerless)`, 20, 52);
 
-      // 4. Clinical Canvas Image Print
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdfWidth = 170;
       const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
@@ -390,69 +388,94 @@
       doc.rect(19, 59, pdfWidth + 2, pdfHeight + 2);
       doc.addImage(imgData, 'JPEG', 20, 60, pdfWidth, pdfHeight);
 
-      const textY = 60 + pdfHeight + 20;
+      const textY = 60 + pdfHeight + 15;
       
-      // 5. PROCESSED DATA SECTION
-      doc.setTextColor(30, 40, 50);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.text("I. CLINICAL METRICS (PROCESSED)", 20, textY);
-      doc.setDrawColor(0, 200, 200);
-      doc.line(20, textY + 3, 190, textY + 3);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.setTextColor(50, 60, 70);
-      doc.text("Sagittal Head Angle (SHA):", 20, textY + 14);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${metrics.sha}°`, 75, textY + 14);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100, 110, 120);
-      doc.setFontSize(10);
-      doc.text("(Normative Range: > 50° | Baseline: Acromion Horizontal)", 90, textY + 14);
-
-      doc.setFontSize(12);
-      doc.setTextColor(50, 60, 70);
-      doc.text("Cranial Angle (CRA):", 20, textY + 22);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${metrics.cra}°`, 75, textY + 22);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100, 110, 120);
-      doc.setFontSize(10);
-      doc.text("(Head Tilt relative to True Horizontal)", 90, textY + 22);
-      
-      // 6. CLINICAL DIAGNOSTIC BLOCK
       doc.setFillColor(245, 245, 250); 
-      doc.rect(20, textY + 30, 170, 12, 'F');
+      doc.rect(20, textY, 170, 16, 'F');
       doc.setTextColor(30, 40, 50);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text("SYSTEM INDICATION:", 25, textY + 38);
+      doc.setFontSize(12);
+      doc.text("PRIMARY CLINICAL INDICATION:", 25, textY + 11);
       doc.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
-      doc.text(severity, 75, textY + 38);
+      doc.text(severity, 95, textY + 11);
 
-      // 7. RAW DATA / TELEMETRY SECTION
+      // ==========================
+      // PAGE 2: DATA & ALGORITHM
+      // ==========================
+      doc.addPage();
+      
+      doc.setFillColor(0, 200, 200);
+      doc.rect(0, 0, 210, 15, 'F');
+
       doc.setTextColor(30, 40, 50);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.text("II. RAW TELEMETRY (PIXEL COORDINATES)", 20, textY + 52);
+      doc.setFontSize(18);
+      doc.text("I. CLINICAL TELEMETRY & NORMATIVE DATA", 20, 30);
       doc.setDrawColor(0, 200, 200);
-      doc.line(20, textY + 55, 190, textY + 55);
+      doc.setLineWidth(0.5);
+      doc.line(20, 33, 190, 33);
+
+      // Table Drawing
+      doc.setFillColor(240, 245, 250);
+      doc.rect(20, 40, 170, 10, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(50, 60, 70);
+      doc.text("METRIC", 25, 47);
+      doc.text("PATIENT VALUE", 75, 47);
+      doc.text("NORMATIVE BASELINE", 125, 47);
+
+      doc.setFont("helvetica", "normal");
+      doc.text("Sagittal Head Angle (SHA)", 25, 57);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${metrics.sha}°`, 75, 57);
+      doc.setFont("helvetica", "normal");
+      doc.text("> 50.0° (Healthy Alignment)", 125, 57);
+
+      doc.text("Cranial Angle (CRA)", 25, 67);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${metrics.cra}°`, 75, 67);
+      doc.setFont("helvetica", "normal");
+      doc.text("N/A (Dependent on gaze/tilt)", 125, 67);
+
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, 72, 190, 72);
+
+      // Algorithm & Math Section
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(30, 40, 50);
+      doc.text("II. BIOMECHANICAL ALGORITHM & TRANSPARENCY", 20, 95);
+      doc.setDrawColor(0, 200, 200);
+      doc.line(20, 98, 190, 98);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
-      doc.setTextColor(80, 90, 100);
-      doc.text(`Acromion Node (Shoulder):     X: ${rawNodes.acro.x}      Y: ${rawNodes.acro.y}`, 20, textY + 64);
-      doc.text(`Tragus Node (Ear Canal):      X: ${rawNodes.tragus.x}      Y: ${rawNodes.tragus.y}`, 20, textY + 70);
-      doc.text(`Canthus Node (Eye/Orbit):     X: ${rawNodes.eye.x}       Y: ${rawNodes.eye.y}`, 20, textY + 76);
+      doc.setTextColor(50, 60, 70);
+      
+      doc.text("This model utilizes Google MediaPipe Pose mapping to isolate key anatomical landmarks. Calculations", 20, 110);
+      doc.text("are performed using raw canvas coordinate deltas mapped to trigonometric arc-tangent functions.", 20, 115);
+      
+      // Math breakdown
+      doc.setFont("helvetica", "bold");
+      doc.text("Raw Pixel Coordinates:", 20, 130);
+      doc.setFont("helvetica", "normal");
+      doc.text(`• Acromion Node (Shoulder):   X: ${rawNodes.acro.x} px,  Y: ${rawNodes.acro.y} px`, 25, 137);
+      doc.text(`• Tragus Node (Ear):          X: ${rawNodes.tragus.x} px,  Y: ${rawNodes.tragus.y} px`, 25, 144);
+      doc.text(`• Canthus Node (Eye):         X: ${rawNodes.eye.x} px,  Y: ${rawNodes.eye.y} px`, 25, 151);
 
-      // 8. MEDICAL DISCLAIMER
+      doc.setFont("helvetica", "bold");
+      doc.text("Algorithmic Processing (SHA Vector):", 20, 166);
+      doc.setFont("helvetica", "normal");
+      doc.text(`• dx = |Tragus(X) - Acromion(X)| = ${Math.round(deltas.shaDx)} px`, 25, 173);
+      doc.text(`• dy = Acromion(Y) - Tragus(Y) = ${Math.round(deltas.shaDy)} px`, 25, 180);
+      doc.text(`• Equation: Math.atan2(dy, dx) * (180 / Math.PI)`, 25, 187);
+      doc.setFont("helvetica", "bold");
+      doc.text(`• Result: ${metrics.sha}°`, 25, 194);
+
+      // Medical Disclaimer Page 2
       doc.setFontSize(8);
       doc.setTextColor(120, 120, 120);
+      doc.setFont("helvetica", "normal");
       doc.text("DISCLAIMER: This automated biometric report provides objective angular telemetry based on markerless AI estimation.", 20, 280);
       doc.text("It is not a medical diagnosis. All findings should be clinically correlated by a licensed healthcare professional.", 20, 284);
 
