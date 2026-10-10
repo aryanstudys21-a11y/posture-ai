@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 4.2 // FINAL CALIBRATION</div>
+      <div class="badge">SYS. V 5.0 // HIGH-PRECISION LOCK</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -215,7 +215,14 @@
     let currentSide = null;
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    
+    // Upgraded to Maximum Clinical Accuracy for Static Images
+    pose.setOptions({ 
+      modelComplexity: 2,         // Uses the heaviest, most accurate AI model
+      smoothLandmarks: false,     // Turns off video-smoothing memory so static images don't jitter
+      enableSegmentation: false, 
+      minDetectionConfidence: 0.8 // Forces stricter landmark placement
+    });
 
     pose.onResults((results) => {
       hud.style.display = 'flex';
@@ -289,7 +296,7 @@
         ctx.shadowBlur = 0;
 
         // Update HUD
-        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE (C7+TRAGUS)`;
+        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE (STATIC CALIBRATION)`;
         sideLabel.style.color = '#8a9fc2';
         cvaReadout.innerText = `${currentAngle}°`;
         cvaReadout.style.color = '#00ff9d';
