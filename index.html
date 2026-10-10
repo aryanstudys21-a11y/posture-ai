@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clinical Posture AI</title>
+  <title>Clinical Posture AI | Sagittal Pipeline</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
@@ -11,6 +11,7 @@
     :root {
       --cyan: #00f0ff;
       --green: #00ff9d;
+      --purple: #b500ff;
       --dark: #050914;
       --glass: rgba(255, 255, 255, 0.03);
       --glass-border: rgba(255, 255, 255, 0.08);
@@ -47,7 +48,7 @@
       border-radius: 30px;
       padding: 30px;
       width: 100%;
-      max-width: 460px;
+      max-width: 480px;
       box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
       display: flex;
       flex-direction: column;
@@ -109,15 +110,23 @@
       content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
       background: linear-gradient(90deg, transparent, var(--green), transparent);
     }
-    .data-label { font-size: 0.85rem; color: #8a9fc2; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 5px; }
-    .cva-value {
-      font-family: 'Space Mono', monospace;
-      font-size: 4rem;
-      font-weight: 700;
-      color: var(--green);
-      line-height: 1;
-      text-shadow: 0 0 30px rgba(0, 255, 157, 0.4);
+    .data-label { font-size: 0.85rem; color: #8a9fc2; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;}
+    
+    .metric-grid {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
     }
+    .metric-title { font-size: 0.8rem; color: #6a7c9c; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; }
+    .metric-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    #val-cva { color: var(--green); text-shadow: 0 0 20px rgba(0, 255, 157, 0.4); }
+    #val-cra { color: var(--cyan); text-shadow: 0 0 20px rgba(0, 240, 255, 0.4); }
+    #val-fsa { color: var(--purple); text-shadow: 0 0 20px rgba(181, 0, 255, 0.4); }
 
     .canvas-container { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     #outputCanvas { width: 100%; display: block; }
@@ -173,20 +182,33 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 11.0 // BONE TARGETING</div>
+      <div class="badge">SYS. V 12.0 // FULL SAGITTAL PIPELINE</div>
       <h1>CVA Matrix</h1>
     </div>
 
     <div class="upload-zone" id="dropArea">
       <span class="icon">⛶</span>
-      <span class="text">INITIALIZE SCAN (TAP TO UPLOAD)</span>
+      <span class="text">INITIALIZE MULTI-METRIC SCAN</span>
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
     <div id="hud-display">
       <div class="data-card" id="dataCard">
         <div class="data-label" id="sideLabel">Awaiting Data</div>
-        <div class="cva-value" id="cvaReadout">--°</div>
+        <div class="metric-grid">
+          <div>
+            <div class="metric-title">CVA</div>
+            <div class="metric-value" id="val-cva">--°</div>
+          </div>
+          <div>
+            <div class="metric-title">CRA</div>
+            <div class="metric-value" id="val-cra">--°</div>
+          </div>
+          <div>
+            <div class="metric-title">FSA</div>
+            <div class="metric-value" id="val-fsa">--°</div>
+          </div>
+        </div>
       </div>
       
       <div class="canvas-container">
@@ -196,7 +218,7 @@
 
     <div class="inputs">
       <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
-      <button id="saveBtn" disabled>Export Telemetry</button>
+      <button id="saveBtn" disabled>Export Full Telemetry</button>
     </div>
   </div>
 
@@ -206,13 +228,14 @@
     const ctx = canvas.getContext('2d');
     const hud = document.getElementById('hud-display');
     const sideLabel = document.getElementById('sideLabel');
-    const cvaReadout = document.getElementById('cvaReadout');
+    const valCVA = document.getElementById('val-cva');
+    const valCRA = document.getElementById('val-cra');
+    const valFSA = document.getElementById('val-fsa');
     const dataCard = document.getElementById('dataCard');
     const saveBtn = document.getElementById('saveBtn');
     const patientIdInput = document.getElementById('patientId');
 
-    let currentAngle = null;
-    let currentSide = null;
+    let metrics = { cva: null, cra: null, fsa: null, side: null };
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     
@@ -238,81 +261,81 @@
         const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
         const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
 
-        const rightEarVis = rightEar.visibility || 0;
-        const leftEarVis = leftEar.visibility || 0;
-        const useRightSide = rightEarVis > leftEarVis;
+        const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
 
         const ear = useRightSide ? rightEar : leftEar;
         const shoulder = useRightSide ? rightShoulder : leftShoulder;
         const eye = useRightSide ? rightEye : leftEye;
 
-        const eX = ear.x * canvas.width, eY = ear.y * canvas.height;
         const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
-        let sx = shoulder.x * canvas.width, sy = shoulder.y * canvas.height;
+        const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
+        const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
         
-        const isFacingLeft = eyeX < eX;
-        currentSide = isFacingLeft ? "LEFT" : "RIGHT"; 
+        const isFacingLeft = eyeX < tragusX;
+        metrics.side = isFacingLeft ? "LEFT" : "RIGHT"; 
         
-        const headScale = Math.hypot(eyeX - eX, eyeY - eY); 
+        const headScale = Math.hypot(eyeX - tragusX, eyeY - tragusY); 
 
-        // --- TRAGUS FIX: Raw Landmark ---
-        let ex = eX;
-        let ey = eY;
+        // CLINICAL C7 BONE TARGETING
+        const c7Y = acroY - (headScale * 1.20); 
+        const c7X = isFacingLeft ? acroX + (headScale * 0.60) : acroX - (headScale * 0.60); 
 
-        // --- C7 FIX: BONE TARGETING ---
-        // Eye-to-Ear distance is physically tiny. To bridge the gap from the acromion 
-        // to the C7 spine, we use massive multipliers to literally jump across the back.
-        sy = sy - (headScale * 1.20); // 120% jump UP to the base of the neck
+        // --- MATH: CALCULATE THE BIG THREE ---
+        // 1. CVA: C7 to Tragus (Forward Head)
+        metrics.cva = Math.round(Math.atan2(c7Y - tragusY, Math.abs(tragusX - c7X)) * (180 / Math.PI));
+        
+        // 2. CRA: Tragus to Eye (Head Tilt)
+        metrics.cra = Math.round(Math.atan2(tragusY - eyeY, Math.abs(eyeX - tragusX)) * (180 / Math.PI));
+        
+        // 3. FSA: C7 to Acromion (Shoulder Protraction)
+        metrics.fsa = Math.round(Math.atan2(acroY - c7Y, Math.abs(acroX - c7X)) * (180 / Math.PI));
 
-        if (isFacingLeft) {
-          sx = sx + (headScale * 0.60); // 60% jump BACK to the spine
-        } else {
-          sx = sx - (headScale * 0.60); // 60% jump BACK to the spine
-        }
-        // ----------------------------------------
-
-        const dy = sy - ey;
-        const dx = Math.abs(ex - sx);
-        currentAngle = Math.round(Math.atan2(dy, dx) * (180 / Math.PI));
-
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 10;
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        // --- HIGH-TECH CANVAS DRAWING ---
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
+        const radius = Math.max(5, canvas.width * 0.012);
+
+        // Draw C7 Horizontal Baseline (Dashed)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.setLineDash([8, 8]);
-        ctx.beginPath(); ctx.moveTo(sx - 200, sy); ctx.lineTo(sx + 200, sy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(c7X - 150, c7Y); ctx.lineTo(c7X + 150, c7Y); ctx.stroke();
         ctx.setLineDash([]);
 
-        ctx.shadowColor = '#00ff9d';
-        ctx.strokeStyle = '#00ff9d';
-        ctx.lineWidth = Math.max(4, canvas.width * 0.008);
-        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(sx, sy); ctx.stroke();
+        // FSA Vector (Purple: C7 to Acromion)
+        ctx.shadowColor = '#b500ff'; ctx.shadowBlur = 10; ctx.strokeStyle = '#b500ff';
+        ctx.beginPath(); ctx.moveTo(c7X, c7Y); ctx.lineTo(acroX, acroY); ctx.stroke();
 
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#fff';
-        const radius = Math.max(6, canvas.width * 0.015);
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(ex, ey, radius, 0, 2*Math.PI); ctx.fill();
-        ctx.beginPath(); ctx.arc(sx, sy, radius, 0, 2*Math.PI); ctx.fill();
-        
+        // CRA Vector (Cyan: Tragus to Eye)
+        ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 10; ctx.strokeStyle = '#00f0ff';
+        ctx.beginPath(); ctx.moveTo(tragusX, tragusY); ctx.lineTo(eyeX, eyeY); ctx.stroke();
+
+        // CVA Vector (Green: C7 to Tragus)
+        ctx.shadowColor = '#00ff9d'; ctx.shadowBlur = 12; ctx.strokeStyle = '#00ff9d';
+        ctx.lineWidth = Math.max(4, canvas.width * 0.008);
+        ctx.beginPath(); ctx.moveTo(c7X, c7Y); ctx.lineTo(tragusX, tragusY); ctx.stroke();
+
+        // Plot Nodes
+        ctx.shadowBlur = 15; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff';
+        [ {x:c7X, y:c7Y}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY}, {x:acroX, y:acroY} ].forEach(pt => {
+          ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill();
+        });
         ctx.shadowBlur = 0;
 
-        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE`;
+        // --- UPDATE HUD ---
+        sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE // FULL SAGITTAL`;
         sideLabel.style.color = '#8a9fc2';
-        cvaReadout.innerText = `${currentAngle}°`;
-        cvaReadout.style.color = '#00ff9d';
+        
+        valCVA.innerText = `${metrics.cva}°`;
+        valCRA.innerText = `${metrics.cra}°`;
+        valFSA.innerText = `${metrics.fsa}°`;
         dataCard.style.borderTopColor = '#00ff9d';
 
         saveBtn.disabled = false;
         saveBtn.classList.add('active');
-        saveBtn.innerText = "Export Telemetry";
       } else {
-        sideLabel.innerText = "SYSTEM ERROR";
+        sideLabel.innerText = "SYSTEM ERROR: NO SUBJECT DETECTED";
         sideLabel.style.color = '#ff0055';
-        cvaReadout.innerText = "ERR";
-        cvaReadout.style.color = '#ff0055';
+        valCVA.innerText = "ERR"; valCRA.innerText = "ERR"; valFSA.innerText = "ERR";
         dataCard.style.borderTopColor = '#ff0055';
-        
         saveBtn.disabled = true;
         saveBtn.classList.remove('active');
       }
@@ -325,7 +348,7 @@
       hud.style.flexDirection = 'column';
       hud.style.gap = '24px';
       sideLabel.innerText = "CALCULATING MATRICES...";
-      cvaReadout.innerText = "---";
+      valCVA.innerText = "--"; valCRA.innerText = "--"; valFSA.innerText = "--";
       saveBtn.disabled = true;
       saveBtn.classList.remove('active');
       
@@ -338,19 +361,21 @@
     });
 
     saveBtn.addEventListener('click', () => {
-      if (currentAngle === null) return;
+      if (metrics.cva === null) return;
       const pId = (patientIdInput.value.trim()) || "ANON";
-      const csv = `Subject_ID,Profile_Side,CVA_Angle,Timestamp\n"${pId}","${currentSide}","${currentAngle}","${new Date().toISOString()}"`;
+      // Upgraded CSV Exporter
+      const csv = `Subject_ID,Profile_Side,CVA_Angle,CRA_Angle,FSA_Angle,Timestamp\n"${pId}","${metrics.side}","${metrics.cva}","${metrics.cra}","${metrics.fsa}","${new Date().toISOString()}"`;
       const blob = new Blob([csv], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `CVA_${pId}.csv`;
+      a.download = `SAGITTAL_REPORT_${pId}.csv`;
       a.click();
 
       const originalText = saveBtn.innerText;
-      saveBtn.innerText = "DATA SECURED";
+      saveBtn.innerText = "TELEMETRY SECURED";
       setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
     });
   </script>
 </body>
 </html>
+
