@@ -79,7 +79,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 21.0 // EXECUTIVE CLINICAL HUB</div>
+      <div class="badge">SYS. V 22.0 // TRUE VERTICAL CORONAL</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -197,22 +197,33 @@
           [ {x:acroX, y:acroY}, {x:tragusX, y:tragusY}, {x:eyeX, y:eyeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
 
         } else {
-          const rAcro = lm[12], lAcro = lm[11], rEye = lm[5], lEye = lm[2];
+          // V22 Upgrade: Ears for tilt, Nose for plumb line
+          const rAcro = lm[12], lAcro = lm[11], rEar = lm[8], lEar = lm[7], nose = lm[0];
+          
           const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
           const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
-          const reX = rEye.x * canvas.width, reY = rEye.y * canvas.height;
-          const leX = lEye.x * canvas.width, leY = lEye.y * canvas.height;
+          const reX = rEar.x * canvas.width, reY = rEar.y * canvas.height;
+          const leX = lEar.x * canvas.width, leY = lEar.y * canvas.height;
+          const nx = nose.x * canvas.width, ny = nose.y * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEye: {x: Math.round(reX), y: Math.round(reY)}, lEye: {x: Math.round(leX), y: Math.round(leY)} };
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)}, nose: {x: Math.round(nx), y: Math.round(ny)} };
 
           metrics.m1 = Math.round(Math.abs(Math.atan2(raY - laY, raX - laX) * (180 / Math.PI)));
           metrics.m2 = Math.round(Math.abs(Math.atan2(reY - leY, reX - leX) * (180 / Math.PI)));
 
+          // Shoulder Line
           ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
+          // Ear Tilt Line
           ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(leX, leY); ctx.lineTo(reX, reY); ctx.stroke();
+          
+          // True Vertical Nose Plumb Line
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.setLineDash([8, 8]);
+          ctx.beginPath(); ctx.moveTo(nx, ny - 150); ctx.lineTo(nx, raY + 50); ctx.stroke();
+          ctx.setLineDash([]);
+
           ctx.fillStyle = '#fff';
-          [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY}, {x:nx, y:ny} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
         }
 
         val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}°`;
@@ -293,7 +304,8 @@
       if(currentMode === 'SAGITTAL') {
           doc.text(`Acromion: (${rawNodes.acro.x}, ${rawNodes.acro.y}) | Tragus: (${rawNodes.tragus.x}, ${rawNodes.tragus.y}) | Eye: (${rawNodes.eye.x}, ${rawNodes.eye.y})`, 25, dataY + 53);
       } else {
-          doc.text(`R.Acro: (${rawNodes.rAcro.x}, ${rawNodes.rAcro.y}) | L.Acro: (${rawNodes.lAcro.x}, ${rawNodes.lAcro.y}) | R.Eye: (${rawNodes.rEye.x}, ${rawNodes.rEye.y})`, 25, dataY + 53);
+          doc.text(`R.Acro: (${rawNodes.rAcro.x}, ${rawNodes.rAcro.y}) | L.Acro: (${rawNodes.lAcro.x}, ${rawNodes.lAcro.y}) | Nose: (${rawNodes.nose.x}, ${rawNodes.nose.y})`, 25, dataY + 53);
+          doc.text(`R.Ear: (${rawNodes.rEar.x}, ${rawNodes.rEar.y}) | L.Ear: (${rawNodes.lEar.x}, ${rawNodes.lEar.y})`, 25, dataY + 60);
       }
 
       doc.setFontSize(8); doc.setTextColor(150, 150, 150);
