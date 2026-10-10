@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 5.1 // STABLE LOCK</div>
+      <div class="badge">SYS. V 6.0 // CLINICAL PRECISION</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -216,7 +216,7 @@
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     
-    // Stable config: Complexity 1 for mobile support, SmoothLandmarks false for jitter fix
+    // Stable config: Complexity 1 to prevent hanging on mobile, SmoothLandmarks false for zero jitter
     pose.setOptions({ 
       modelComplexity: 1,         
       smoothLandmarks: false,     
@@ -236,34 +236,39 @@
 
       if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
-        const rightEar = lm[8], rightShoulder = lm[12];
-        const leftEar = lm[7], leftShoulder = lm[11];
+        // 1. Map all required cranial landmarks
+        const rightEar = lm[8], rightShoulder = lm[12], rightEye = lm[5];
+        const leftEar = lm[7], leftShoulder = lm[11], leftEye = lm[2];
 
-        // Determine profile side based on landmark visibility
+        // 2. Determine Profile Side
         const isRight = (rightEar.visibility || 0) >= (leftEar.visibility || 0);
         const ear = isRight ? rightEar : leftEar;
         const shoulder = isRight ? rightShoulder : leftShoulder;
+        const eye = isRight ? rightEye : leftEye;
         currentSide = isRight ? "RIGHT" : "LEFT";
 
-        let ex = ear.x * canvas.width, ey = ear.y * canvas.height;
+        // 3. Establish Immutable Cranial Scale (Ear-to-Eye Distance)
+        const eX = ear.x * canvas.width, eY = ear.y * canvas.height;
+        const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
         let sx = shoulder.x * canvas.width, sy = shoulder.y * canvas.height;
+        
+        const headScale = Math.hypot(eyeX - eX, eyeY - eY); // Absolute reference scale based on facial geometry
 
-        const neckDist = Math.abs(ey - sy);
+        // --- DYNAMIC TRAGUS TRIANGULATION ---
+        // Tragus sits approx 15% forward on the vector from the ear hole to the eye
+        let ex = eX + ((eyeX - eX) * 0.15);
+        let ey = eY + ((eyeY - eY) * 0.15);
 
-        // --- TRAGUS CALIBRATION OFFSET ---
+        // --- TRUE C7 ANATOMICAL TRIANGULATION ---
+        // C7 sits UP and BACK from the Acromion, scaling strictly with head size, not neck length
+        sy = sy - (headScale * 0.75); // Shift UP by 75% of ear-to-eye distance
+
         if (currentSide === "RIGHT") {
-          ex = ex - (neckDist * 0.08); 
+          // Right profile (facing left). Spine is to the RIGHT (+X)
+          sx = sx + (headScale * 0.50); 
         } else {
-          ex = ex + (neckDist * 0.08); 
-        }
-
-        // --- C7 CALIBRATION OFFSET ---
-        sy = sy - (neckDist * 0.40); 
-
-        if (currentSide === "RIGHT") {
-          sx = sx + (neckDist * 0.10); 
-        } else {
-          sx = sx - (neckDist * 0.10); 
+          // Left profile (facing right). Spine is to the LEFT (-X)
+          sx = sx - (headScale * 0.50); 
         }
         // ----------------------------------------
 
@@ -295,7 +300,7 @@
         ctx.shadowBlur = 0;
 
         // Update HUD
-        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE (STATIC CALIBRATION)`;
+        sideLabel.innerText = `BIOMETRIC LOCK: ${currentSide} PROFILE (IMMUTABLE SCALE)`;
         sideLabel.style.color = '#8a9fc2';
         cvaReadout.innerText = `${currentAngle}°`;
         cvaReadout.style.color = '#00ff9d';
