@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 5.0 // HIGH-PRECISION LOCK</div>
+      <div class="badge">SYS. V 5.1 // STABLE LOCK</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -216,12 +216,13 @@
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     
-    // Upgraded to Maximum Clinical Accuracy for Static Images
+    // Stable config: Complexity 1 for mobile support, SmoothLandmarks false for jitter fix
     pose.setOptions({ 
-      modelComplexity: 2,         // Uses the heaviest, most accurate AI model
-      smoothLandmarks: false,     // Turns off video-smoothing memory so static images don't jitter
+      modelComplexity: 1,         
+      smoothLandmarks: false,     
       enableSegmentation: false, 
-      minDetectionConfidence: 0.8 // Forces stricter landmark placement
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
     });
 
     pose.onResults((results) => {
@@ -250,7 +251,6 @@
         const neckDist = Math.abs(ey - sy);
 
         // --- TRAGUS CALIBRATION OFFSET ---
-        // Right Profile = Facing Left on screen. Face is on the left (-X).
         if (currentSide === "RIGHT") {
           ex = ex - (neckDist * 0.08); 
         } else {
@@ -258,13 +258,12 @@
         }
 
         // --- C7 CALIBRATION OFFSET ---
-        sy = sy - (neckDist * 0.40); // Shift UP 40%
+        sy = sy - (neckDist * 0.40); 
 
-        // Right Profile = Spine is on the right (+X).
         if (currentSide === "RIGHT") {
-          sx = sx + (neckDist * 0.10); // Shift RIGHT (backward toward spine) 10%
+          sx = sx + (neckDist * 0.10); 
         } else {
-          sx = sx - (neckDist * 0.10); // Shift LEFT (backward toward spine) 10%
+          sx = sx - (neckDist * 0.10); 
         }
         // ----------------------------------------
 
