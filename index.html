@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 3.1 // FULL CALIBRATION</div>
+      <div class="badge">SYS. V 4.0 // FINAL CALIBRATION</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -231,6 +231,7 @@
         const rightEar = lm[8], rightShoulder = lm[12];
         const leftEar = lm[7], leftShoulder = lm[11];
 
+        // Determine profile side based on landmark visibility
         const isRight = (rightEar.visibility || 0) >= (leftEar.visibility || 0);
         const ear = isRight ? rightEar : leftEar;
         const shoulder = isRight ? rightShoulder : leftShoulder;
@@ -242,20 +243,21 @@
         const neckDist = Math.abs(ey - sy);
 
         // --- TRAGUS CALIBRATION OFFSET ---
-        // Shift the ear landmark forward to hit the tragus
+        // Right Profile = Facing Left on screen. Face is on the left (-X).
         if (currentSide === "RIGHT") {
-          ex = ex + (neckDist * 0.08); // Shift Right (forward toward face)
+          ex = ex - (neckDist * 0.08); // Shift LEFT (forward toward face)
         } else {
-          ex = ex - (neckDist * 0.08); // Shift Left (forward toward face)
+          ex = ex + (neckDist * 0.08); // Shift RIGHT (forward toward face)
         }
 
         // --- C7 CALIBRATION OFFSET ---
         sy = sy - (neckDist * 0.15); // Shift UP 15%
 
+        // Right Profile = Spine is on the right (+X).
         if (currentSide === "RIGHT") {
-          sx = sx - (neckDist * 0.25); // Shift LEFT (backward toward spine)
-        } else {
           sx = sx + (neckDist * 0.25); // Shift RIGHT (backward toward spine)
+        } else {
+          sx = sx - (neckDist * 0.25); // Shift LEFT (backward toward spine)
         }
         // ----------------------------------------
 
