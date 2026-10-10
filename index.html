@@ -6,20 +6,20 @@
   <title>Clinical Posture AI</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: #151d2f;
+      --bg: #030712;
+      --card-bg: #111827;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --cyan: #38bdf8;
+      --cyan: #06b6d4;
+      --cyan-glow: rgba(6, 182, 212, 0.4);
       --green: #10b981;
-      --border: #24324d;
+      --border: #1f2937;
     }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
     body {
-      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       margin: 0;
@@ -27,59 +27,60 @@
       display: flex;
       justify-content: center;
       min-height: 100vh;
+      background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, transparent 70%);
     }
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 24px 20px;
+      border-radius: 24px;
+      padding: 32px 24px;
       width: 100%;
       max-width: 480px;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
     h1 {
-      font-size: 1.45rem;
-      font-weight: 700;
+      font-size: 1.75rem;
+      font-weight: 800;
       margin: 0;
-      letter-spacing: -0.02em;
       text-align: center;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .badge {
       align-self: center;
       font-size: 0.75rem;
-      font-weight: 600;
+      font-weight: 800;
       color: var(--cyan);
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 999px;
-      padding: 4px 12px;
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: 8px;
+      padding: 6px 14px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .subtitle {
-      font-size: 0.9rem;
-      color: var(--muted);
-      margin: -6px 0 4px;
-      text-align: center;
-      line-height: 1.4;
+      letter-spacing: 0.1em;
+      box-shadow: 0 0 15px var(--cyan-glow);
     }
     .upload-box {
       position: relative;
-      border: 2px dashed var(--cyan);
-      background: rgba(56, 189, 248, 0.04);
-      border-radius: 14px;
-      padding: 20px 16px;
+      border: 2px dashed rgba(6, 182, 212, 0.5);
+      background: rgba(6, 182, 212, 0.03);
+      border-radius: 16px;
+      padding: 24px 16px;
       text-align: center;
       cursor: pointer;
       font-weight: 600;
       color: var(--cyan);
-      font-size: 0.95rem;
-      transition: background 0.2s;
+      font-size: 1rem;
+      transition: all 0.3s ease;
     }
-    .upload-box:active { background: rgba(56, 189, 248, 0.1); }
+    .upload-box:hover {
+      background: rgba(6, 182, 212, 0.08);
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
     .upload-box input {
       position: absolute;
       inset: 0;
@@ -90,66 +91,82 @@
     }
     #statusBanner {
       display: none;
-      font-size: 0.95rem;
-      font-weight: 600;
       text-align: center;
-      padding: 12px;
-      border-radius: 10px;
+      padding: 20px;
+      border-radius: 16px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .cva-number {
+      display: block;
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: var(--green);
+      line-height: 1;
+      text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+      margin-top: 8px;
     }
     #outputCanvas {
       width: 100%;
-      border-radius: 12px;
+      border-radius: 16px;
       border: 1px solid var(--border);
       background: #000;
       display: none;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
+      margin-top: 10px;
     }
     input[type="text"] {
       width: 100%;
-      padding: 14px;
-      background: #0d1322;
-      border: 1px solid var(--border);
-      border-radius: 10px;
+      padding: 16px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 12px;
       color: #fff;
-      font-size: 0.95rem;
-      font-family: inherit;
+      font-size: 1rem;
       outline: none;
+      transition: border 0.3s;
     }
-    input[type="text"]:focus { border-color: var(--cyan); }
+    input[type="text"]:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+    }
     button#saveBtn {
       width: 100%;
-      padding: 15px;
+      padding: 18px;
       border: none;
-      border-radius: 10px;
-      background: #24324d;
-      color: var(--muted);
-      font-size: 0.95rem;
-      font-weight: 700;
+      border-radius: 12px;
+      background: #1f2937;
+      color: #6b7280;
+      font-size: 1.1rem;
+      font-weight: 800;
       cursor: not-allowed;
-      font-family: inherit;
-      transition: all 0.2s;
+      transition: all 0.3s ease;
     }
     button#saveBtn.active {
-      background: var(--green);
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: #fff;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+    }
+    button#saveBtn.active:active {
+      transform: scale(0.98);
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <div class="badge">Clinical Metric Engine</div>
-    <h1>Markerless CVA Analysis</h1>
-    <p class="subtitle">Upload a lateral (90° side profile) photo to compute Craniovertebral Angle automatically.</p>
+    <div class="badge">AI Diagnostic Engine</div>
+    <h1>Markerless CVA</h1>
 
     <div class="upload-box">
-      📸 Capture or Upload Photo
+      <span style="font-size:1.2rem; display:block; margin-bottom:8px;">📸</span>
+      Tap to Capture or Upload Profile
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
@@ -157,8 +174,8 @@
     <canvas id="outputCanvas"></canvas>
 
     <div class="form-group">
-      <input type="text" id="patientId" placeholder="Patient / Participant ID (e.g., P01)">
-      <button id="saveBtn" disabled>Download CSV Record</button>
+      <input type="text" id="patientId" placeholder="Participant ID (e.g., Subj-001)">
+      <button id="saveBtn" disabled>Export CSV Record</button>
     </div>
   </div>
 
@@ -200,37 +217,46 @@
         const dx = Math.abs(ex - sx);
         currentAngle = Math.round(Math.atan2(dy, dx) * (180 / Math.PI));
 
+        // Add Neon Glow to lines
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 15;
+
         // Horizontal baseline reference
-        ctx.strokeStyle = '#38bdf8';
+        ctx.strokeStyle = '#06b6d4';
         ctx.lineWidth = Math.max(3, canvas.width * 0.005);
-        ctx.setLineDash([10, 8]);
+        ctx.setLineDash([12, 10]);
         ctx.beginPath(); ctx.moveTo(sx - 200, sy); ctx.lineTo(sx + 200, sy); ctx.stroke();
         ctx.setLineDash([]);
 
         // Tragus-to-shoulder vector
+        ctx.shadowColor = '#10b981';
         ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = Math.max(4, canvas.width * 0.008);
+        ctx.lineWidth = Math.max(5, canvas.width * 0.008);
         ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(sx, sy); ctx.stroke();
 
         // Keypoints
-        const radius = Math.max(7, canvas.width * 0.012);
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ef4444';
+        const radius = Math.max(8, canvas.width * 0.015);
         ctx.fillStyle = '#ef4444';
         ctx.beginPath(); ctx.arc(ex, ey, radius, 0, 2*Math.PI); ctx.fill();
         ctx.beginPath(); ctx.arc(sx, sy, radius, 0, 2*Math.PI); ctx.fill();
+        
+        // Reset shadow
+        ctx.shadowBlur = 0;
 
-        banner.style.background = 'rgba(16, 185, 129, 0.12)';
-        banner.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-        banner.style.color = '#10b981';
-        banner.innerText = `Detected ${currentSide} Profile | CVA: ${currentAngle}°`;
+        // Render massive CVA Number
+        banner.style.background = 'rgba(16, 185, 129, 0.05)';
+        banner.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+        banner.innerHTML = `<span style="color:#94a3b8; font-weight:600;">Detected ${currentSide} Profile</span><span class="cva-number">${currentAngle}°</span>`;
 
         saveBtn.disabled = false;
         saveBtn.classList.add('active');
-        saveBtn.innerText = "Download CSV Record";
+        saveBtn.innerText = "Export CSV Record";
       } else {
-        banner.style.background = 'rgba(239, 68, 68, 0.12)';
-        banner.style.border = '1px solid rgba(239, 68, 68, 0.3)';
-        banner.style.color = '#ef4444';
-        banner.innerText = "No landmarks detected. Keep ear and shoulder clear.";
+        banner.style.background = 'rgba(239, 68, 68, 0.05)';
+        banner.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+        banner.innerHTML = `<span style="color:#ef4444; font-weight:600;">⚠️ No landmarks detected.<br>Ensure full shoulder is visible.</span>`;
         saveBtn.disabled = true;
         saveBtn.classList.remove('active');
       }
@@ -240,10 +266,9 @@
       const file = e.target.files[0];
       if (!file) return;
       banner.style.display = 'block';
-      banner.style.background = 'rgba(56, 189, 248, 0.12)';
-      banner.style.border = '1px solid rgba(56, 189, 248, 0.3)';
-      banner.style.color = '#38bdf8';
-      banner.innerText = "Processing landmarks with MediaPipe...";
+      banner.style.background = 'rgba(6, 182, 212, 0.05)';
+      banner.style.borderColor = 'rgba(6, 182, 212, 0.2)';
+      banner.innerHTML = `<span style="color:#06b6d4; font-weight:600;">Scanning Biomechanics...</span>`;
       saveBtn.disabled = true;
       saveBtn.classList.remove('active');
       const img = new Image();
@@ -261,8 +286,9 @@
       a.download = `CVA_${pId}.csv`;
       a.click();
 
-      saveBtn.innerText = "Saved to Downloads";
-      setTimeout(() => { saveBtn.innerText = "Download CSV Record"; }, 2500);
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = "✓ Saved Successfully";
+      setTimeout(() => { saveBtn.innerText = originalText; }, 2000);
     });
   </script>
 </body>
