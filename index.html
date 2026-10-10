@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clinical Posture AI | Sagittal Pipeline</title>
   
-  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-  <!-- jsPDF for Clinical Reporting -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
@@ -185,7 +183,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 14.0 // CLINICAL PDF GENERATOR</div>
+      <div class="badge">SYS. V 15.0 // DYNAMIC PDF RENDERING</div>
       <h1>SAGITTAL MATRIX</h1>
     </div>
 
@@ -265,7 +263,6 @@
         const shoulder = useRightSide ? rightShoulder : leftShoulder;
         const eye = useRightSide ? rightEye : leftEye;
 
-        // PURE DIRECT MAPPING 
         const eyeX = eye.x * canvas.width, eyeY = eye.y * canvas.height;
         const tragusX = ear.x * canvas.width, tragusY = ear.y * canvas.height;
         const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
@@ -273,7 +270,6 @@
         const isFacingLeft = eyeX < tragusX;
         metrics.side = isFacingLeft ? "LEFT" : "RIGHT"; 
 
-        // --- SHA & CRA CALCULATION ---
         const shaDx = Math.abs(tragusX - acroX);
         const shaDy = acroY - tragusY;
         metrics.sha = Math.round(Math.atan2(shaDy, shaDx) * (180 / Math.PI));
@@ -282,7 +278,6 @@
         const craDy = tragusY - eyeY;
         metrics.cra = Math.round(Math.atan2(craDy, craDx) * (180 / Math.PI));
 
-        // --- CANVAS OVERLAY DRAWING ---
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
 
@@ -304,7 +299,6 @@
         });
         ctx.shadowBlur = 0;
 
-        // --- UPDATE HUD ---
         sideLabel.innerText = `BIOMETRIC LOCK: ${metrics.side} PROFILE`;
         sideLabel.style.color = '#8a9fc2';
         
@@ -343,7 +337,6 @@
       img.src = URL.createObjectURL(file);
     });
 
-    // --- PHASE 1: AUTOMATED PDF GENERATION ---
     saveBtn.addEventListener('click', () => {
       if (metrics.sha === null) return;
       
@@ -352,44 +345,81 @@
       const pId = (patientIdInput.value.trim()) || "ANON";
       const dateStr = new Date().toLocaleString();
 
-      // Clinical Diagnosis Logic
-      let severity = "Normal Alignment";
-      if (metrics.sha < 50) severity = "Mild Forward Head Posture (FHP)";
-      if (metrics.sha < 45) severity = "Moderate Forward Head Posture (FHP)";
-      if (metrics.sha < 40) severity = "Severe Forward Head Posture (FHP)";
+      // Dynamic Diagnostics
+      let severity = "NORMAL ALIGNMENT";
+      let sevColor = [0, 255, 157]; // Green
+      if (metrics.sha < 50) { severity = "MILD FORWARD HEAD POSTURE"; sevColor = [255, 204, 0]; } // Yellow
+      if (metrics.sha < 45) { severity = "MODERATE FORWARD HEAD POSTURE"; sevColor = [255, 102, 0]; } // Orange
+      if (metrics.sha < 40) { severity = "SEVERE FORWARD HEAD POSTURE"; sevColor = [255, 0, 85]; } // Red
 
-      // PDF Header
+      // Draw Dark Background
+      doc.setFillColor(5, 9, 20); // #050914
+      doc.rect(0, 0, 210, 297, 'F');
+
+      // Cyan Accent Line
+      doc.setFillColor(0, 240, 255);
+      doc.rect(20, 15, 170, 2, 'F');
+
+      // Header
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(22);
-      doc.text("Automated Postural Analysis Report", 20, 20);
+      doc.text("CVA MATRIX // CLINICAL REPORT", 20, 30);
       
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.text(`Subject ID: ${pId}`, 20, 30);
-      doc.text(`Timestamp: ${dateStr}`, 20, 37);
-      doc.text(`Profile Validated: ${metrics.side} Sagittal`, 20, 44);
+      doc.setFontSize(10);
+      doc.setTextColor(138, 159, 194);
+      doc.text(`SUBJECT ID: ${pId}`, 20, 40);
+      doc.text(`TIMESTAMP: ${dateStr}`, 20, 46);
+      doc.text(`PROFILE: ${metrics.side} SAGITTAL`, 20, 52);
 
-      // Embed the Canvas Image with Overlays
+      // Embedded Image with Neon Border
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdfWidth = 170; // mm
+      const pdfWidth = 170;
       const pdfHeight = (canvas.height / canvas.width) * pdfWidth;
       
-      doc.addImage(imgData, 'JPEG', 20, 55, pdfWidth, pdfHeight);
+      doc.setDrawColor(0, 240, 255);
+      doc.setLineWidth(0.5);
+      doc.rect(19, 59, pdfWidth + 2, pdfHeight + 2);
+      doc.addImage(imgData, 'JPEG', 20, 60, pdfWidth, pdfHeight);
 
-      // Diagnostic Metrics Section
-      const textY = 55 + pdfHeight + 15;
-      
+      // Telemetry Box
+      const textY = 60 + pdfHeight + 20;
+      doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
-      doc.text("Clinical Matrices", 20, textY);
+      doc.text("BIOMETRIC TELEMETRY", 20, textY);
       
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.2);
+      doc.line(20, textY + 4, 190, textY + 4);
+
       doc.setFont("helvetica", "normal");
       doc.setFontSize(12);
-      doc.text(`Sagittal Head Angle (SHA): ${metrics.sha}° (Normative: > 50°)`, 20, textY + 10);
-      doc.text(`Cranial Angle (CRA): ${metrics.cra}°`, 20, textY + 17);
-      
+      doc.text("Sagittal Head Angle (SHA):", 20, textY + 16);
+      doc.setTextColor(0, 255, 157);
       doc.setFont("helvetica", "bold");
-      doc.text(`Diagnostic Status: ${severity}`, 20, textY + 27);
+      doc.text(`${metrics.sha}°`, 85, textY + 16);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(138, 159, 194);
+      doc.text("(Normative: > 50°)", 105, textY + 16);
+
+      doc.setTextColor(255, 255, 255);
+      doc.text("Cranial Angle (CRA):", 20, textY + 26);
+      doc.setTextColor(0, 240, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${metrics.cra}°`, 85, textY + 26);
+      
+      // Dynamic Diagnostic Status Block
+      doc.setFillColor(30, 35, 45); // Darker Box
+      doc.rect(20, textY + 36, 170, 16, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.text("DIAGNOSIS:", 25, textY + 47);
+      
+      doc.setTextColor(sevColor[0], sevColor[1], sevColor[2]);
+      doc.text(severity, 55, textY + 47);
 
       doc.save(`Posture_Report_${pId}.pdf`);
 
