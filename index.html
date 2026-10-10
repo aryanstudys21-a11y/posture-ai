@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clinical Posture Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    h2 { margin-bottom: 5px; color: #38bdf8; }
+    p.subtitle { margin-top: 0; font-size: 0.9rem; color: #94a3b8; }
+    #stats { font-size: 1.3rem; margin: 15px 0; color: #4ade80; font-weight: bold; background: #1e293b; padding: 10px; border-radius: 8px; }
+    #output { width: 100%; max-width: 480px; border-radius: 12px; border: 2px solid #334155; margin-bottom: 15px; }
+    .controls { display: flex; flex-direction: column; align-items: center; gap: 15px; max-width: 480px; margin: 0 auto; }
+    input[type="file"] { font-size: 1rem; }
+    input[type="text"] { padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: #fff; width: 80%; text-align: center; }
+    button { background: #3b82f6; color: white; border: none; padding: 12px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; font-weight: bold; width: 85%; }
+    button:disabled { background: #475569; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h2>Markerless CVA Analysis</h2>
+  <p class="subtitle">Upload a lateral profile photo for automated extraction</p>
+  
+  <div class="controls">
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <div id="stats">Awaiting Image...</div>
+  <canvas id="output"></canvas>
+
+  <div class="controls">
+    <input type="text" id="patientId" placeholder="Enter Patient ID (e.g., P-001)">
+    <button id="saveBtn" disabled>Download Research Data (CSV)</button>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('output');
+    const ctx = canvas.getContext('2d');
+    const stats = document.getElementById('stats');
+    const saveBtn = document.getElementById('saveBtn');
+    const patientIdInput = document.getElementById('patientId');
+
+    let currentAngle = null;
+    let currentSide = null;
+
+    const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+    pose.onResults((results) => {
+      canvas.width = results.image.width;
+      canvas.height = results.image.height;
+      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+      if (results.poseLandmarks) {
+        const lm = results.poseLandmarks;
+        const rightEar = lm[8], rightShoulder = lm[12];
+        const leftEar = lm[7], leftShoulder = lm[11];
+
+        const isRight = (rightEar.visibility || 0) >= (leftEar.visibility || 0);
+        const ear = isRight ? rightEar : leftEar;
+        const shoulder = isRight ? rightShoulder : leftShoulder;
+        currentSide = isRight ? "Right" : "Left";
+
+        const ex = ear.x * canvas.width, ey = ear.y * canvas.height;
+        const sx = shoulder.x * canvas.width, sy = shoulder.y * canvas.height;
+
+        const dy = sy - ey;
+        const dx = Math.abs(ex - sx);
+        currentAngle = Math.round(Math.atan2(dy, dx) * (180 / Math.PI));
+
+        // Draw true horizontal reference line
+        ctx.strokeStyle = '#38bdf8'; 
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath(); ctx.moveTo(sx - 150, sy); ctx.lineTo(sx + 150, sy); ctx.stroke();
+        ctx.setLineDash([]); 
+
+        // Draw connecting vector
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(sx, sy); ctx.stroke();
+
+        // Draw landmarks
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath(); ctx.arc(ex, ey, 8, 0, 2*Math.PI); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, 8, 0, 2*Math.PI); ctx.fill();
+
+        stats.innerText = `${currentSide} Profile | CVA: ${currentAngle}°`;
+        saveBtn.disabled = false;
+        saveBtn.style.background = "#22c55e";
+      } else {
+        stats.innerText = "❌ No landmarks detected.";
+        saveBtn.disabled = true;
+        saveBtn.style.background = "#475569";
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      stats.innerText = "Analyzing posture...";
+      saveBtn.disabled = true;
+      const img = new Image();
+      img.onload = () => pose.send({ image: img });
+      img.src = URL.createObjectURL(file);
+    });
+
+    saveBtn.addEventListener('click', () => {
+      if (currentAngle === null) return;
+      const pId = patientIdInput.value || "Unknown";
+      const row = `Patient_ID,Side,CVA_Angle,Timestamp\n"${pId}","${currentSide}","${currentAngle}","${new Date().toLocaleString()}"`;
+      const blob = new Blob([row], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `CVA_Data_${pId}.csv`;
+      a.click();
+      stats.innerText = `✅ Data Saved for ${pId}`;
+    });
+  </script>
+</body>
+</html>
