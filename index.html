@@ -173,7 +173,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 9.0 // OPTIMIZED C7 LOCK</div>
+      <div class="badge">SYS. V 10.0 // CLINICAL LOCK</div>
       <h1>CVA Matrix</h1>
     </div>
 
@@ -259,13 +259,14 @@
         let ex = eX;
         let ey = eY;
 
-        // --- C7 FIX: Final Optimized Adjustment ---
-        sy = sy - (headScale * 0.20); // Shift UP slightly less to hit the C7 bump
+        // --- C7 FIX: The Clinical Lock ---
+        // Launch straight up from the acromion to the neck base, then a tiny nudge back to the spinous process.
+        sy = sy - (headScale * 0.30); 
 
         if (isFacingLeft) {
-          sx = sx + (headScale * 0.30); // Shift backward towards spine
+          sx = sx + (headScale * 0.12); 
         } else {
-          sx = sx - (headScale * 0.30); // Shift backward towards spine
+          sx = sx - (headScale * 0.12); 
         }
         // ----------------------------------------
 
