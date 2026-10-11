@@ -87,7 +87,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 25.0 // CONFIDENCE ENGINE</div>
+      <div class="badge">SYS. V 25.1 // BUST-SHOT PATCH</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -201,7 +201,8 @@
           const shoulder = useRightSide ? rightShoulder : leftShoulder;
           const hip = useRightSide ? rightHip : leftHip;
 
-          minConfidence = Math.min(ear.visibility, shoulder.visibility, hip.visibility);
+          // SURGICAL FIX: Removed hip.visibility from the strict confidence check to allow cropped photos
+          minConfidence = Math.min(ear.visibility, shoulder.visibility);
 
           const earX = ear.x * canvas.width, earY = ear.y * canvas.height;
           const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
