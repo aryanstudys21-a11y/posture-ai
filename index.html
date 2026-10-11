@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clinical Posture AI | Omni-Matrix</title>
+  <title>Clinical Posture AI | Holistic Matrix</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <!-- Swapped from Pose to Holistic Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
@@ -87,7 +88,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 26.0 // MICRO-ANATOMICAL ENGINE</div>
+      <div class="badge">SYS. V 27.0 // HOLISTIC ENGINE</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -151,8 +152,16 @@
     let metrics = { m1: null, m2: null, side: null, raw1: 0, raw2: 0, confidence: 0 };
     let rawNodes = {};
 
-    const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    // Initialize MediaPipe Holistic
+    const holistic = new Holistic({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}` });
+    holistic.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      refineFaceLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
 
     viewSagittal.onclick = () => { currentMode = 'SAGITTAL'; viewSagittal.classList.add('active'); viewCoronal.classList.remove('active'); updateLabels(); resetMetrics(); };
     viewCoronal.onclick = () => { currentMode = 'CORONAL'; viewCoronal.classList.add('active'); viewSagittal.classList.remove('active'); updateLabels(); resetMetrics(); };
@@ -177,49 +186,52 @@
       if (!file) return;
       canvasWrap.style.display = 'block';
       const img = new Image();
-      img.onload = async () => { await pose.reset(); pose.send({ image: img }); };
+      img.onload = async () => { await holistic.reset(); holistic.send({ image: img }); };
       img.src = URL.createObjectURL(file);
     });
 
-    pose.onResults((results) => {
+    holistic.onResults((results) => {
       canvas.width = results.image.width; canvas.height = results.image.height;
       ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-      if (results.poseLandmarks) {
-        const lm = results.poseLandmarks;
+      if (results.poseLandmarks && results.faceLandmarks) {
+        const poseLms = results.poseLandmarks;
+        const faceLms = results.faceLandmarks;
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
         
         let minConfidence = 1.0;
 
         if (currentMode === 'SAGITTAL') {
-          // --- SAGITTAL MICRO-ANATOMICAL ENGINE ---
-          const rightEar = lm[8], rightShoulder = lm[12], rightHip = lm[24], rightEye = lm[5];
-          const leftEar = lm[7], leftShoulder = lm[11], leftHip = lm[23], leftEye = lm[2];
+          // Pose Nodes for body structure
+          const rightShoulder = poseLms[12], leftShoulder = poseLms[11];
+          const rightHip = poseLms[24], leftHip = poseLms[23];
           
-          const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
-          const earRaw = useRightSide ? rightEar : leftEar;
+          // Face Nodes for precise ear canal (Tragus)
+          const rightTragus = faceLms[234], leftTragus = faceLms[454];
+
+          // Determine profile side
+          const useRightSide = (rightShoulder.visibility || 0) > (leftShoulder.visibility || 0);
+          
           const shoulderRaw = useRightSide ? rightShoulder : leftShoulder;
           const hipRaw = useRightSide ? rightHip : leftHip;
-          const eyeRaw = useRightSide ? rightEye : leftEye;
+          const tragusRaw = useRightSide ? rightTragus : leftTragus;
 
-          minConfidence = Math.min(earRaw.visibility, shoulderRaw.visibility);
+          // Note: Face mesh doesn't output visibility scores natively like pose, we rely on pose shoulder visibility for the gate
+          minConfidence = shoulderRaw.visibility;
 
-          // Raw MediaPipe Pixels
-          const rxEarX = earRaw.x * canvas.width, rxEarY = earRaw.y * canvas.height;
           const rxShoulderX = shoulderRaw.x * canvas.width, rxShoulderY = shoulderRaw.y * canvas.height;
-          const eyeY = eyeRaw.y * canvas.height;
           const hipX = hipRaw.x * canvas.width, hipY = hipRaw.y * canvas.height;
           
           const torsoLength = Math.hypot(hipX - rxShoulderX, hipY - rxShoulderY);
 
-          // 1. True Acromion Proxy (Shift UP from armpit joint by 4% of torso length)
+          // C7/Acromion Base Proxy
           const trueAcroX = rxShoulderX;
-          const trueAcroY = rxShoulderY - (torsoLength * 0.04);
+          const trueAcroY = rxShoulderY - (torsoLength * 0.04); // Shift up to bone surface
 
-          // 2. True Tragus Proxy (Shift DOWN towards eye level)
-          const trueTragusX = rxEarX;
-          const trueTragusY = (rxEarY * 0.6) + (eyeY * 0.4); 
+          // High Precision Tragus
+          const trueTragusX = tragusRaw.x * canvas.width;
+          const trueTragusY = tragusRaw.y * canvas.height;
 
           metrics.side = (trueTragusX < trueAcroX) ? "LEFT" : "RIGHT"; 
           rawNodes = { acro: {x: Math.round(trueAcroX), y: Math.round(trueAcroY)}, tragus: {x: Math.round(trueTragusX), y: Math.round(trueTragusY)} };
@@ -232,11 +244,6 @@
           metrics.raw2 = (fhpDisplacement / torsoLength).toFixed(2);
           metrics.m2 = metrics.raw2; 
 
-          // VISUAL PROOF: Draw faint raw nodes, bright true nodes
-          ctx.fillStyle = 'rgba(255,255,255,0.3)';
-          ctx.beginPath(); ctx.arc(rxShoulderX, rxShoulderY, radius*0.8, 0, 2*Math.PI); ctx.fill();
-          ctx.beginPath(); ctx.arc(rxEarX, rxEarY, radius*0.8, 0, 2*Math.PI); ctx.fill();
-
           ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(trueAcroX, trueAcroY); ctx.lineTo(trueTragusX, trueTragusY); ctx.stroke();
           ctx.fillStyle = '#fff';
           [ {x:trueAcroX, y:trueAcroY}, {x:trueTragusX, y:trueTragusY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
@@ -244,30 +251,28 @@
           val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}`;
 
         } else {
-          // --- CORONAL MICRO-ANATOMICAL ENGINE ---
-          const rAcroRaw = lm[12], lAcroRaw = lm[11];
-          // Use OUTER Canthus (Orbital Bone) instead of center pupil for stability
-          const rEyeOuter = lm[6], lEyeOuter = lm[3]; 
-          const innerREye = lm[4], innerLEye = lm[1];
+          // --- CORONAL HOLISTIC ENGINE ---
+          const rAcroRaw = poseLms[12], lAcroRaw = poseLms[11];
+          // Tragus nodes from high-density face mesh
+          const rTragus = faceLms[234], lTragus = faceLms[454];
+          // Nose Bridge node from face mesh
+          const noseBridge = faceLms[168]; 
           
-          minConfidence = Math.min(rAcroRaw.visibility, lAcroRaw.visibility, rEyeOuter.visibility, lEyeOuter.visibility);
+          minConfidence = Math.min(rAcroRaw.visibility, lAcroRaw.visibility);
 
-          const torsoMockLength = Math.hypot((lm[24].x - rAcroRaw.x)*canvas.width, (lm[24].y - rAcroRaw.y)*canvas.height);
+          const torsoMockLength = Math.hypot((poseLms[24].x - rAcroRaw.x)*canvas.width, (poseLms[24].y - rAcroRaw.y)*canvas.height);
 
-          // 1. True Acromion Proxy (Shift UP)
           const raX = rAcroRaw.x * canvas.width, raY = (rAcroRaw.y * canvas.height) - (torsoMockLength * 0.04);
           const laX = lAcroRaw.x * canvas.width, laY = (lAcroRaw.y * canvas.height) - (torsoMockLength * 0.04);
           
-          // 2. Orbital Bone Proxy (Ignores pupil movement)
-          const reX = rEyeOuter.x * canvas.width, reY = rEyeOuter.y * canvas.height;
-          const leX = lEyeOuter.x * canvas.width, leY = lEyeOuter.y * canvas.height;
+          const reX = rTragus.x * canvas.width, reY = rTragus.y * canvas.height;
+          const leX = lTragus.x * canvas.width, leY = lTragus.y * canvas.height;
 
-          // 3. True Midline (Nose Bridge)
-          const bridgeX = ((innerREye.x + innerLEye.x) / 2) * canvas.width;
-          const bridgeY = ((innerREye.y + innerLEye.y) / 2) * canvas.height;
+          const bridgeX = noseBridge.x * canvas.width;
+          const bridgeY = noseBridge.y * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEye: {x: Math.round(reX), y: Math.round(reY)}, lEye: {x: Math.round(leX), y: Math.round(leY)} };
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)} };
 
           const slopeDy = Math.abs(raY - laY);
           const slopeDx = Math.abs(raX - laX);
@@ -280,7 +285,6 @@
           metrics.raw2 = (Math.abs(headMidX - neckMidX) / shoulderWidth).toFixed(3);
           metrics.m2 = metrics.raw2; 
 
-          // True Vertical Plumb Line
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.setLineDash([8, 8]);
           ctx.beginPath(); ctx.moveTo(bridgeX, 0); ctx.lineTo(bridgeX, canvas.height); ctx.stroke();
           ctx.setLineDash([]);
@@ -307,6 +311,11 @@
             warningBanner.style.display = 'none';
             saveBtn.disabled = false; saveBtn.className = 'export-btn active'; saveBtn.innerText = "GENERATE CLINICAL PDF";
         }
+      } else {
+        resetMetrics();
+        valConf.innerText = "ERR";
+        warningBanner.innerText = "⚠ SYSTEM ERROR: NO FACIAL MESH DETECTED";
+        warningBanner.style.display = 'block';
       }
     });
 
