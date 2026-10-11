@@ -87,7 +87,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 25.1 // BUST-SHOT PATCH</div>
+      <div class="badge">SYS. V 26.0 // MICRO-ANATOMICAL ENGINE</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -193,56 +193,81 @@
         let minConfidence = 1.0;
 
         if (currentMode === 'SAGITTAL') {
-          const rightEar = lm[8], rightShoulder = lm[12], rightHip = lm[24];
-          const leftEar = lm[7], leftShoulder = lm[11], leftHip = lm[23];
+          // --- SAGITTAL MICRO-ANATOMICAL ENGINE ---
+          const rightEar = lm[8], rightShoulder = lm[12], rightHip = lm[24], rightEye = lm[5];
+          const leftEar = lm[7], leftShoulder = lm[11], leftHip = lm[23], leftEye = lm[2];
           
           const useRightSide = (rightEar.visibility || 0) > (leftEar.visibility || 0);
-          const ear = useRightSide ? rightEar : leftEar;
-          const shoulder = useRightSide ? rightShoulder : leftShoulder;
-          const hip = useRightSide ? rightHip : leftHip;
+          const earRaw = useRightSide ? rightEar : leftEar;
+          const shoulderRaw = useRightSide ? rightShoulder : leftShoulder;
+          const hipRaw = useRightSide ? rightHip : leftHip;
+          const eyeRaw = useRightSide ? rightEye : leftEye;
 
-          // SURGICAL FIX: Removed hip.visibility from the strict confidence check to allow cropped photos
-          minConfidence = Math.min(ear.visibility, shoulder.visibility);
+          minConfidence = Math.min(earRaw.visibility, shoulderRaw.visibility);
 
-          const earX = ear.x * canvas.width, earY = ear.y * canvas.height;
-          const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
-          const hipX = hip.x * canvas.width, hipY = hip.y * canvas.height;
+          // Raw MediaPipe Pixels
+          const rxEarX = earRaw.x * canvas.width, rxEarY = earRaw.y * canvas.height;
+          const rxShoulderX = shoulderRaw.x * canvas.width, rxShoulderY = shoulderRaw.y * canvas.height;
+          const eyeY = eyeRaw.y * canvas.height;
+          const hipX = hipRaw.x * canvas.width, hipY = hipRaw.y * canvas.height;
           
-          metrics.side = (earX < acroX) ? "LEFT" : "RIGHT"; 
-          rawNodes = { acro: {x: Math.round(acroX), y: Math.round(acroY)}, ear: {x: Math.round(earX), y: Math.round(earY)}, hip: {x: Math.round(hipX), y: Math.round(hipY)} };
+          const torsoLength = Math.hypot(hipX - rxShoulderX, hipY - rxShoulderY);
 
-          const cvaDx = Math.abs(earX - acroX);
-          const cvaDy = acroY - earY;
+          // 1. True Acromion Proxy (Shift UP from armpit joint by 4% of torso length)
+          const trueAcroX = rxShoulderX;
+          const trueAcroY = rxShoulderY - (torsoLength * 0.04);
+
+          // 2. True Tragus Proxy (Shift DOWN towards eye level)
+          const trueTragusX = rxEarX;
+          const trueTragusY = (rxEarY * 0.6) + (eyeY * 0.4); 
+
+          metrics.side = (trueTragusX < trueAcroX) ? "LEFT" : "RIGHT"; 
+          rawNodes = { acro: {x: Math.round(trueAcroX), y: Math.round(trueAcroY)}, tragus: {x: Math.round(trueTragusX), y: Math.round(trueTragusY)} };
+
+          const cvaDx = Math.abs(trueTragusX - trueAcroX);
+          const cvaDy = trueAcroY - trueTragusY;
           metrics.m1 = Math.round(Math.atan2(cvaDy, cvaDx) * (180 / Math.PI)); 
 
-          const torsoLength = Math.hypot(hipX - acroX, hipY - acroY);
           const fhpDisplacement = cvaDx;
           metrics.raw2 = (fhpDisplacement / torsoLength).toFixed(2);
           metrics.m2 = metrics.raw2; 
 
-          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(earX, earY); ctx.stroke();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(acroX, acroY); ctx.lineTo(hipX, hipY); ctx.stroke();
+          // VISUAL PROOF: Draw faint raw nodes, bright true nodes
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.beginPath(); ctx.arc(rxShoulderX, rxShoulderY, radius*0.8, 0, 2*Math.PI); ctx.fill();
+          ctx.beginPath(); ctx.arc(rxEarX, rxEarY, radius*0.8, 0, 2*Math.PI); ctx.fill();
+
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(trueAcroX, trueAcroY); ctx.lineTo(trueTragusX, trueTragusY); ctx.stroke();
           ctx.fillStyle = '#fff';
-          [ {x:acroX, y:acroY}, {x:earX, y:earY}, {x:hipX, y:hipY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          [ {x:trueAcroX, y:trueAcroY}, {x:trueTragusX, y:trueTragusY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+
+          val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}`;
 
         } else {
-          const rAcro = lm[12], lAcro = lm[11], rEye = lm[5], lEye = lm[2];
-          const rEarRaw = lm[8], lEarRaw = lm[7];
+          // --- CORONAL MICRO-ANATOMICAL ENGINE ---
+          const rAcroRaw = lm[12], lAcroRaw = lm[11];
+          // Use OUTER Canthus (Orbital Bone) instead of center pupil for stability
+          const rEyeOuter = lm[6], lEyeOuter = lm[3]; 
           const innerREye = lm[4], innerLEye = lm[1];
           
-          minConfidence = Math.min(rAcro.visibility, lAcro.visibility, rEarRaw.visibility, lEarRaw.visibility);
+          minConfidence = Math.min(rAcroRaw.visibility, lAcroRaw.visibility, rEyeOuter.visibility, lEyeOuter.visibility);
 
-          const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
-          const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
+          const torsoMockLength = Math.hypot((lm[24].x - rAcroRaw.x)*canvas.width, (lm[24].y - rAcroRaw.y)*canvas.height);
+
+          // 1. True Acromion Proxy (Shift UP)
+          const raX = rAcroRaw.x * canvas.width, raY = (rAcroRaw.y * canvas.height) - (torsoMockLength * 0.04);
+          const laX = lAcroRaw.x * canvas.width, laY = (lAcroRaw.y * canvas.height) - (torsoMockLength * 0.04);
           
-          const reX = rEarRaw.x * canvas.width, reY = rEye.y * canvas.height;
-          const leX = lEarRaw.x * canvas.width, leY = lEye.y * canvas.height;
+          // 2. Orbital Bone Proxy (Ignores pupil movement)
+          const reX = rEyeOuter.x * canvas.width, reY = rEyeOuter.y * canvas.height;
+          const leX = lEyeOuter.x * canvas.width, leY = lEyeOuter.y * canvas.height;
 
+          // 3. True Midline (Nose Bridge)
           const bridgeX = ((innerREye.x + innerLEye.x) / 2) * canvas.width;
           const bridgeY = ((innerREye.y + innerLEye.y) / 2) * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)} };
+          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEye: {x: Math.round(reX), y: Math.round(reY)}, lEye: {x: Math.round(leX), y: Math.round(leY)} };
 
           const slopeDy = Math.abs(raY - laY);
           const slopeDx = Math.abs(raX - laX);
@@ -255,6 +280,7 @@
           metrics.raw2 = (Math.abs(headMidX - neckMidX) / shoulderWidth).toFixed(3);
           metrics.m2 = metrics.raw2; 
 
+          // True Vertical Plumb Line
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.setLineDash([8, 8]);
           ctx.beginPath(); ctx.moveTo(bridgeX, 0); ctx.lineTo(bridgeX, canvas.height); ctx.stroke();
           ctx.setLineDash([]);
@@ -264,26 +290,22 @@
           
           ctx.fillStyle = '#fff';
           [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY}, {x:bridgeX, y:bridgeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          
+          val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}`;
         }
 
         // CONFIDENCE GATING
         metrics.confidence = Math.round(minConfidence * 100);
-        val1.innerText = `${metrics.m1}°`; 
-        val2.innerText = `${metrics.m2}`;
         valConf.innerText = `${metrics.confidence}%`;
 
         if(metrics.confidence < 85) {
             valConf.classList.add('low');
             warningBanner.style.display = 'block';
-            saveBtn.disabled = true;
-            saveBtn.className = 'export-btn error';
-            saveBtn.innerText = "LOCKED: MARGIN OF ERROR TOO HIGH";
+            saveBtn.disabled = true; saveBtn.className = 'export-btn error'; saveBtn.innerText = "LOCKED: MARGIN OF ERROR TOO HIGH";
         } else {
             valConf.classList.remove('low');
             warningBanner.style.display = 'none';
-            saveBtn.disabled = false;
-            saveBtn.className = 'export-btn active';
-            saveBtn.innerText = "GENERATE CLINICAL PDF";
+            saveBtn.disabled = false; saveBtn.className = 'export-btn active'; saveBtn.innerText = "GENERATE CLINICAL PDF";
         }
       }
     });
@@ -317,7 +339,6 @@
 
       doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F');
       doc.setFillColor(0, 200, 200); doc.rect(0, 0, 210, 15, 'F');
-
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
       doc.text("CLINICAL POSTURE REPORT", 20, 30);
       
