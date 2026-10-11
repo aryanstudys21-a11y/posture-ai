@@ -14,6 +14,7 @@
     :root {
       --cyan: #00f0ff;
       --green: #00ff9d;
+      --red: #ff3366;
       --dark: #050914;
       --glass: rgba(255, 255, 255, 0.03);
       --glass-border: rgba(255, 255, 255, 0.08);
@@ -58,28 +59,35 @@
     .view-btn { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: #8a9fc2; padding: 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: 0.3s; }
     .view-btn.active { background: rgba(0, 255, 157, 0.1); border-color: var(--green); color: var(--green); }
 
-    .upload-zone { position: relative; border: 1px dashed rgba(255, 255, 255, 0.2); background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%); border-radius: 16px; padding: 20px; text-align: center; cursor: pointer; }
+    .upload-zone { position: relative; border: 1px dashed rgba(255, 255, 255, 0.2); background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%); border-radius: 16px; padding: 20px; text-align: center; cursor: pointer; transition: 0.3s; }
     .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
     
     .canvas-container { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--glass-border); background: #000; display: none; }
     #outputCanvas { width: 100%; display: block; }
+    
+    #warningBanner { display: none; background: rgba(255, 51, 102, 0.2); color: var(--red); border: 1px solid var(--red); padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; font-weight: bold; font-family: 'Space Mono', monospace; letter-spacing: 1px; }
 
-    .metric-grid { display: flex; justify-content: space-around; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; text-align: center; }
-    .metric-title { font-size: 0.7rem; color: #8a9fc2; font-weight: 700; height: 20px; }
-    .metric-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; color: #fff; }
+    .metric-grid { display: flex; justify-content: space-between; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 16px; padding: 15px; text-align: center; flex-wrap: wrap; gap: 10px;}
+    .metric-grid > div { flex: 1; min-width: 30%; }
+    .metric-title { font-size: 0.65rem; color: #8a9fc2; font-weight: 700; height: 15px; text-transform: uppercase;}
+    .metric-value { font-family: 'Space Mono', monospace; font-size: 1.6rem; font-weight: 700; color: #fff; }
+    
     #val-1 { color: var(--green); }
     #val-2 { color: var(--cyan); }
+    #val-conf { color: var(--green); }
+    #val-conf.low { color: var(--red); }
 
     input[type="text"], button.export-btn { background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 15px; border-radius: 12px; color: #fff; width: 100%; font-family: 'Space Mono', monospace; font-size: 0.9rem; outline: none; }
     button.export-btn { font-family: 'Outfit', sans-serif; font-weight: 700; text-transform: uppercase; cursor: not-allowed; color: #6a7c9c; transition: 0.3s; margin-top: 10px; }
     button.export-btn.active { background: var(--green); color: #000; border-color: var(--green); cursor: pointer; }
+    button.export-btn.error { background: rgba(255, 51, 102, 0.1); border-color: var(--red); color: var(--red); }
   </style>
 </head>
 <body>
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 24.0 // CORONAL PRECISION FIX</div>
+      <div class="badge">SYS. V 25.0 // CONFIDENCE ENGINE</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -94,24 +102,30 @@
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
+    <div id="warningBanner">⚠ INTERFERENCE DETECTED: ADJUST LIGHTING OR CLOTHING</div>
+
     <div class="canvas-container" id="canvasWrap">
       <canvas id="outputCanvas"></canvas>
     </div>
 
     <div class="metric-grid">
       <div>
-        <div class="metric-title" id="lbl-1">CVA (HEAD POSTURE)</div>
+        <div class="metric-title" id="lbl-1">CVA (HEAD)</div>
         <div class="metric-value" id="val-1">--°</div>
       </div>
       <div>
-        <div class="metric-title" id="lbl-2">NORM. DISPLACEMENT</div>
+        <div class="metric-title" id="lbl-2">DISPLACEMENT</div>
         <div class="metric-value" id="val-2">--</div>
+      </div>
+      <div>
+        <div class="metric-title">CONFIDENCE</div>
+        <div class="metric-value" id="val-conf">--%</div>
       </div>
     </div>
 
     <div>
       <input type="text" id="patientId" placeholder="SUBJECT_ID (E.G. SUBJ-01)">
-      <button id="saveBtn" class="export-btn" disabled>GENERATE CLINICAL PDF</button>
+      <button id="saveBtn" class="export-btn" disabled>AWAITING DATA</button>
     </div>
   </div>
 
@@ -120,6 +134,7 @@
     const canvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
     const canvasWrap = document.getElementById('canvasWrap');
+    const warningBanner = document.getElementById('warningBanner');
     
     const viewSagittal = document.getElementById('viewSagittal');
     const viewCoronal = document.getElementById('viewCoronal');
@@ -128,11 +143,12 @@
     const lbl2 = document.getElementById('lbl-2');
     const val1 = document.getElementById('val-1');
     const val2 = document.getElementById('val-2');
+    const valConf = document.getElementById('val-conf');
     const saveBtn = document.getElementById('saveBtn');
     const patientIdInput = document.getElementById('patientId');
 
     let currentMode = 'SAGITTAL';
-    let metrics = { m1: null, m2: null, side: null, raw1: 0, raw2: 0 };
+    let metrics = { m1: null, m2: null, side: null, raw1: 0, raw2: 0, confidence: 0 };
     let rawNodes = {};
 
     const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
@@ -143,16 +159,17 @@
     
     function updateLabels() {
       if(currentMode === 'SAGITTAL') {
-        lbl1.innerText = "CVA (HEAD POSTURE)"; lbl2.innerText = "NORM. DISPLACEMENT";
+        lbl1.innerText = "CVA (HEAD)"; lbl2.innerText = "DISPLACEMENT";
       } else {
-        lbl1.innerText = "SHOULDER SLOPE"; lbl2.innerText = "ASYMMETRY INDEX";
+        lbl1.innerText = "SHOULDER SLOPE"; lbl2.innerText = "ASYMMETRY IDX";
       }
     }
 
     function resetMetrics() {
-      val1.innerText = "--°"; val2.innerText = "--";
-      saveBtn.disabled = true; saveBtn.classList.remove('active');
-      metrics = { m1: null, m2: null, side: null };
+      val1.innerText = "--°"; val2.innerText = "--"; valConf.innerText = "--%";
+      valConf.classList.remove('low'); warningBanner.style.display = 'none';
+      saveBtn.disabled = true; saveBtn.className = 'export-btn'; saveBtn.innerText = "AWAITING DATA";
+      metrics = { m1: null, m2: null, side: null, confidence: 0 };
     }
 
     fileInput.addEventListener('change', async (e) => {
@@ -173,8 +190,9 @@
         ctx.lineWidth = Math.max(2, canvas.width * 0.005);
         const radius = Math.max(5, canvas.width * 0.012);
         
+        let minConfidence = 1.0;
+
         if (currentMode === 'SAGITTAL') {
-          // --- SAGITTAL GEOMETRY ENGINE ---
           const rightEar = lm[8], rightShoulder = lm[12], rightHip = lm[24];
           const leftEar = lm[7], leftShoulder = lm[11], leftHip = lm[23];
           
@@ -182,6 +200,8 @@
           const ear = useRightSide ? rightEar : leftEar;
           const shoulder = useRightSide ? rightShoulder : leftShoulder;
           const hip = useRightSide ? rightHip : leftHip;
+
+          minConfidence = Math.min(ear.visibility, shoulder.visibility, hip.visibility);
 
           const earX = ear.x * canvas.width, earY = ear.y * canvas.height;
           const acroX = shoulder.x * canvas.width, acroY = shoulder.y * canvas.height;
@@ -204,23 +224,19 @@
           ctx.fillStyle = '#fff';
           [ {x:acroX, y:acroY}, {x:earX, y:earY}, {x:hipX, y:hipY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
 
-          val1.innerText = `${metrics.m1}°`; 
-          val2.innerText = `${metrics.m2}`;
-
         } else {
-          // --- FRONT VIEW GEOMETRY ENGINE (V24 PRECISION) ---
           const rAcro = lm[12], lAcro = lm[11], rEye = lm[5], lEye = lm[2];
           const rEarRaw = lm[8], lEarRaw = lm[7];
           const innerREye = lm[4], innerLEye = lm[1];
           
+          minConfidence = Math.min(rAcro.visibility, lAcro.visibility, rEarRaw.visibility, lEarRaw.visibility);
+
           const raX = rAcro.x * canvas.width, raY = rAcro.y * canvas.height;
           const laX = lAcro.x * canvas.width, laY = lAcro.y * canvas.height;
           
-          // Tragus Proxy: X-axis of the ear, Y-axis of the pupil for precise horizontal tilt
           const reX = rEarRaw.x * canvas.width, reY = rEye.y * canvas.height;
           const leX = lEarRaw.x * canvas.width, leY = lEye.y * canvas.height;
 
-          // Bridge of Nose for True Plumb Line
           const bridgeX = ((innerREye.x + innerLEye.x) / 2) * canvas.width;
           const bridgeY = ((innerREye.y + innerLEye.y) / 2) * canvas.height;
 
@@ -238,30 +254,42 @@
           metrics.raw2 = (Math.abs(headMidX - neckMidX) / shoulderWidth).toFixed(3);
           metrics.m2 = metrics.raw2; 
 
-          // 1. True Vertical Plumb Line (from top of canvas through bridge of nose down to bottom)
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.setLineDash([8, 8]);
           ctx.beginPath(); ctx.moveTo(bridgeX, 0); ctx.lineTo(bridgeX, canvas.height); ctx.stroke();
           ctx.setLineDash([]);
 
-          // 2. Shoulder Slope
           ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(laX, laY); ctx.lineTo(raX, raY); ctx.stroke();
-          // 3. Head Tilt (Pupil-Level Ear Markers)
           ctx.strokeStyle = '#00f0ff'; ctx.beginPath(); ctx.moveTo(leX, leY); ctx.lineTo(reX, reY); ctx.stroke();
           
           ctx.fillStyle = '#fff';
           [ {x:raX, y:raY}, {x:laX, y:laY}, {x:reX, y:reY}, {x:leX, y:leY}, {x:bridgeX, y:bridgeY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
-          
-          val1.innerText = `${metrics.m1}°`; 
-          val2.innerText = `${metrics.m2}`;
         }
 
-        saveBtn.disabled = false; saveBtn.classList.add('active');
+        // CONFIDENCE GATING
+        metrics.confidence = Math.round(minConfidence * 100);
+        val1.innerText = `${metrics.m1}°`; 
+        val2.innerText = `${metrics.m2}`;
+        valConf.innerText = `${metrics.confidence}%`;
+
+        if(metrics.confidence < 85) {
+            valConf.classList.add('low');
+            warningBanner.style.display = 'block';
+            saveBtn.disabled = true;
+            saveBtn.className = 'export-btn error';
+            saveBtn.innerText = "LOCKED: MARGIN OF ERROR TOO HIGH";
+        } else {
+            valConf.classList.remove('low');
+            warningBanner.style.display = 'none';
+            saveBtn.disabled = false;
+            saveBtn.className = 'export-btn active';
+            saveBtn.innerText = "GENERATE CLINICAL PDF";
+        }
       }
     });
 
     // --- REBUILT CLINICAL PDF ENGINE ---
     saveBtn.addEventListener('click', () => {
-      if (metrics.m1 === null) return;
+      if (metrics.m1 === null || metrics.confidence < 85) return;
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const pId = (patientIdInput.value.trim()) || "ANON";
@@ -275,27 +303,15 @@
           m1Name = "Craniovertebral Angle (CVA)"; m2Name = "Torso-Normalized FHP Ratio";
           norm1 = ">= 50.0° (Optimal)"; norm2 = "Baseline Scale Variant";
           
-          if (metrics.m1 < 50 && metrics.m1 >= 45) { 
-              severity = "MILD FORWARD HEAD POSTURE"; sevColor = [200, 150, 0]; 
-              feedbackStr = "Detected mild deviation. Recommend continuous monitoring and cervical retraction exercises.";
-          }
-          if (metrics.m1 < 45) { 
-              severity = "SEVERE DEVIATION (FHP)"; sevColor = [200, 0, 0]; 
-              feedbackStr = "Detected high deviation. Significant forward head posture noted. Evaluation advised.";
-          }
-          if (metrics.m1 >= 50) {
-              feedbackStr = "Patient falls within optimal sagittal alignment parameters.";
-          }
+          if (metrics.m1 < 50 && metrics.m1 >= 45) { severity = "MILD FORWARD HEAD POSTURE"; sevColor = [200, 150, 0]; feedbackStr = "Detected mild deviation. Recommend continuous monitoring and cervical retraction exercises."; }
+          if (metrics.m1 < 45) { severity = "SEVERE DEVIATION (FHP)"; sevColor = [200, 0, 0]; feedbackStr = "Detected high deviation. Significant forward head posture noted. Evaluation advised."; }
+          if (metrics.m1 >= 50) { feedbackStr = "Patient falls within optimal sagittal alignment parameters."; }
       } else {
           m1Name = "Shoulder Slope"; m2Name = "Asymmetry Index (Head Tilt Ratio)";
           norm1 = "< 3.0° (Symmetrical)"; norm2 = "Index < 0.05";
           
-          if (metrics.m1 >= 3 || metrics.raw2 >= 0.05) { 
-              severity = "ASYMMETRY DETECTED"; sevColor = [200, 100, 0]; 
-              feedbackStr = "Detected lateral head tilt or shoulder drop. Consider evaluating unilateral muscle tension.";
-          } else {
-              feedbackStr = "Patient demonstrates solid coronal symmetry and leveling.";
-          }
+          if (metrics.m1 >= 3 || metrics.raw2 >= 0.05) { severity = "ASYMMETRY DETECTED"; sevColor = [200, 100, 0]; feedbackStr = "Detected lateral head tilt or shoulder drop. Consider evaluating unilateral muscle tension."; }
+          else { feedbackStr = "Patient demonstrates solid coronal symmetry and leveling."; }
       }
 
       doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 297, 'F');
@@ -333,13 +349,17 @@
       doc.text(m2Name, 25, dataY + 23);
       doc.setFont("helvetica", "bold"); doc.setTextColor(0,0,0); doc.text(`${metrics.m2}`, 95, dataY + 23);
       doc.setFont("helvetica", "normal"); doc.setTextColor(80, 90, 100); doc.text(norm2, 130, dataY + 23);
+      
+      doc.text("AI Telemetry Confidence:", 25, dataY + 33);
+      doc.setFont("helvetica", "bold"); doc.setTextColor(0, 150, 50); doc.text(`${metrics.confidence}%`, 95, dataY + 33);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(80, 90, 100); doc.text("Passes >= 85% Threshold", 130, dataY + 33);
 
       doc.setTextColor(30, 40, 50); doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-      doc.text("II. CLINICAL FEEDBACK", 20, dataY + 40);
-      doc.setDrawColor(0, 200, 200); doc.line(20, dataY + 43, 190, dataY + 43);
+      doc.text("II. CLINICAL FEEDBACK", 20, dataY + 50);
+      doc.setDrawColor(0, 200, 200); doc.line(20, dataY + 53, 190, dataY + 53);
       
       doc.setFontSize(10); doc.setTextColor(80, 90, 100); doc.setFont("helvetica", "italic");
-      doc.text(`"${feedbackStr}"`, 25, dataY + 53);
+      doc.text(`"${feedbackStr}"`, 25, dataY + 63);
 
       doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
       doc.text("DISCLAIMER: Objective markerless AI estimation. Not a formal medical diagnosis.", 20, 285);
