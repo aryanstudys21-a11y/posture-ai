@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clinical Posture AI | Holistic Matrix</title>
+  <title>Clinical Posture AI | Virtual C7 Matrix</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <!-- Swapped from Pose to Holistic Engine -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -15,6 +14,7 @@
     :root {
       --cyan: #00f0ff;
       --green: #00ff9d;
+      --magenta: #ff00ff;
       --red: #ff3366;
       --dark: #050914;
       --glass: rgba(255, 255, 255, 0.03);
@@ -88,7 +88,7 @@
 
   <div class="glass-panel">
     <div class="header">
-      <div class="badge">SYS. V 27.0 // HOLISTIC ENGINE</div>
+      <div class="badge">SYS. V 28.1 // VIRTUAL C7 ANDROID PORT</div>
       <h1>POSTURE AI</h1>
     </div>
     
@@ -152,7 +152,6 @@
     let metrics = { m1: null, m2: null, side: null, raw1: 0, raw2: 0, confidence: 0 };
     let rawNodes = {};
 
-    // Initialize MediaPipe Holistic
     const holistic = new Holistic({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}` });
     holistic.setOptions({
       modelComplexity: 1,
@@ -203,59 +202,70 @@
         let minConfidence = 1.0;
 
         if (currentMode === 'SAGITTAL') {
-          // Pose Nodes for body structure
-          const rightShoulder = poseLms[12], leftShoulder = poseLms[11];
-          const rightHip = poseLms[24], leftHip = poseLms[23];
+          const rShoulder = poseLms[12], lShoulder = poseLms[11];
+          const rHip = poseLms[24], lHip = poseLms[23];
           
-          // Face Nodes for precise ear canal (Tragus)
-          const rightTragus = faceLms[234], leftTragus = faceLms[454];
+          const rTragus = faceLms[234], lTragus = faceLms[454];
 
-          // Determine profile side
-          const useRightSide = (rightShoulder.visibility || 0) > (leftShoulder.visibility || 0);
+          const useRightSide = (rShoulder.visibility || 0) > (lShoulder.visibility || 0);
           
-          const shoulderRaw = useRightSide ? rightShoulder : leftShoulder;
-          const hipRaw = useRightSide ? rightHip : leftHip;
-          const tragusRaw = useRightSide ? rightTragus : leftTragus;
+          minConfidence = useRightSide ? rShoulder.visibility : lShoulder.visibility;
 
-          // Note: Face mesh doesn't output visibility scores natively like pose, we rely on pose shoulder visibility for the gate
-          minConfidence = shoulderRaw.visibility;
-
-          const rxShoulderX = shoulderRaw.x * canvas.width, rxShoulderY = shoulderRaw.y * canvas.height;
-          const hipX = hipRaw.x * canvas.width, hipY = hipRaw.y * canvas.height;
+          // 1. Calculate Virtual C7 Spine Node
+          const spineMidX = ((rShoulder.x + lShoulder.x) / 2) * canvas.width;
+          const spineMidY = ((rShoulder.y + lShoulder.y) / 2) * canvas.height;
           
-          const torsoLength = Math.hypot(hipX - rxShoulderX, hipY - rxShoulderY);
+          const shoulderWidth = Math.hypot((rShoulder.x - lShoulder.x) * canvas.width, (rShoulder.y - lShoulder.y) * canvas.height);
+          
+          let trueC7X = spineMidX;
+          let trueC7Y = spineMidY - (shoulderWidth * 0.08);
 
-          // C7/Acromion Base Proxy
-          const trueAcroX = rxShoulderX;
-          const trueAcroY = rxShoulderY - (torsoLength * 0.04); // Shift up to bone surface
+          // Fallback if shoulder width is too small (perfect side profile)
+          if (shoulderWidth < (canvas.width * 0.05)) {
+             const activeShoulder = useRightSide ? rShoulder : lShoulder;
+             trueC7X = activeShoulder.x * canvas.width;
+             trueC7Y = (activeShoulder.y * canvas.height) - (canvas.height * 0.02);
+          }
 
-          // High Precision Tragus
-          const trueTragusX = tragusRaw.x * canvas.width;
-          const trueTragusY = tragusRaw.y * canvas.height;
+          // 2. High Precision Tragus
+          const activeTragus = useRightSide ? rTragus : lTragus;
+          const trueTragusX = activeTragus.x * canvas.width;
+          const trueTragusY = activeTragus.y * canvas.height;
 
-          metrics.side = (trueTragusX < trueAcroX) ? "LEFT" : "RIGHT"; 
-          rawNodes = { acro: {x: Math.round(trueAcroX), y: Math.round(trueAcroY)}, tragus: {x: Math.round(trueTragusX), y: Math.round(trueTragusY)} };
+          metrics.side = (trueTragusX < trueC7X) ? "LEFT" : "RIGHT"; 
+          rawNodes = { c7: {x: Math.round(trueC7X), y: Math.round(trueC7Y)}, tragus: {x: Math.round(trueTragusX), y: Math.round(trueTragusY)} };
 
-          const cvaDx = Math.abs(trueTragusX - trueAcroX);
-          const cvaDy = trueAcroY - trueTragusY;
+          const cvaDx = Math.abs(trueTragusX - trueC7X);
+          const cvaDy = trueC7Y - trueTragusY;
           metrics.m1 = Math.round(Math.atan2(cvaDy, cvaDx) * (180 / Math.PI)); 
 
-          const fhpDisplacement = cvaDx;
-          metrics.raw2 = (fhpDisplacement / torsoLength).toFixed(2);
+          // Displacement Normalization
+          const activeHip = useRightSide ? rHip : lHip;
+          const hipX = activeHip.x * canvas.width, hipY = activeHip.y * canvas.height;
+          const torsoLength = Math.hypot(hipX - trueC7X, hipY - trueC7Y);
+          
+          metrics.raw2 = (cvaDx / torsoLength).toFixed(2);
           metrics.m2 = metrics.raw2; 
 
-          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(trueAcroX, trueAcroY); ctx.lineTo(trueTragusX, trueTragusY); ctx.stroke();
-          ctx.fillStyle = '#fff';
-          [ {x:trueAcroX, y:trueAcroY}, {x:trueTragusX, y:trueTragusY} ].forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, 2*Math.PI); ctx.fill(); });
+          // Horizon Line
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); 
+          ctx.moveTo(trueC7X, trueC7Y); 
+          ctx.lineTo(trueTragusX < trueC7X ? trueC7X - 100 : trueC7X + 100, trueC7Y); 
+          ctx.stroke();
+
+          // Neck Vector
+          ctx.strokeStyle = '#00ff9d'; ctx.beginPath(); ctx.moveTo(trueC7X, trueC7Y); ctx.lineTo(trueTragusX, trueTragusY); ctx.stroke();
+          
+          // Nodes: C7 is Magenta, Tragus is Cyan
+          ctx.fillStyle = '#ff00ff'; ctx.beginPath(); ctx.arc(trueC7X, trueC7Y, radius, 0, 2*Math.PI); ctx.fill();
+          ctx.fillStyle = '#00f0ff'; ctx.beginPath(); ctx.arc(trueTragusX, trueTragusY, radius, 0, 2*Math.PI); ctx.fill();
 
           val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}`;
 
         } else {
           // --- CORONAL HOLISTIC ENGINE ---
           const rAcroRaw = poseLms[12], lAcroRaw = poseLms[11];
-          // Tragus nodes from high-density face mesh
           const rTragus = faceLms[234], lTragus = faceLms[454];
-          // Nose Bridge node from face mesh
           const noseBridge = faceLms[168]; 
           
           minConfidence = Math.min(rAcroRaw.visibility, lAcroRaw.visibility);
@@ -272,7 +282,6 @@
           const bridgeY = noseBridge.y * canvas.height;
 
           metrics.side = "FRONTAL";
-          rawNodes = { rAcro: {x: Math.round(raX), y: Math.round(raY)}, lAcro: {x: Math.round(laX), y: Math.round(laY)}, rEar: {x: Math.round(reX), y: Math.round(reY)}, lEar: {x: Math.round(leX), y: Math.round(leY)} };
 
           const slopeDy = Math.abs(raY - laY);
           const slopeDx = Math.abs(raX - laX);
@@ -298,7 +307,6 @@
           val1.innerText = `${metrics.m1}°`; val2.innerText = `${metrics.m2}`;
         }
 
-        // CONFIDENCE GATING
         metrics.confidence = Math.round(minConfidence * 100);
         valConf.innerText = `${metrics.confidence}%`;
 
@@ -319,7 +327,6 @@
       }
     });
 
-    // --- REBUILT CLINICAL PDF ENGINE ---
     saveBtn.addEventListener('click', () => {
       if (metrics.m1 === null || metrics.confidence < 85) return;
       const { jsPDF } = window.jspdf;
@@ -334,14 +341,12 @@
       if(currentMode === 'SAGITTAL') {
           m1Name = "Craniovertebral Angle (CVA)"; m2Name = "Torso-Normalized FHP Ratio";
           norm1 = ">= 50.0° (Optimal)"; norm2 = "Baseline Scale Variant";
-          
           if (metrics.m1 < 50 && metrics.m1 >= 45) { severity = "MILD FORWARD HEAD POSTURE"; sevColor = [200, 150, 0]; feedbackStr = "Detected mild deviation. Recommend continuous monitoring and cervical retraction exercises."; }
           if (metrics.m1 < 45) { severity = "SEVERE DEVIATION (FHP)"; sevColor = [200, 0, 0]; feedbackStr = "Detected high deviation. Significant forward head posture noted. Evaluation advised."; }
           if (metrics.m1 >= 50) { feedbackStr = "Patient falls within optimal sagittal alignment parameters."; }
       } else {
           m1Name = "Shoulder Slope"; m2Name = "Asymmetry Index (Head Tilt Ratio)";
           norm1 = "< 3.0° (Symmetrical)"; norm2 = "Index < 0.05";
-          
           if (metrics.m1 >= 3 || metrics.raw2 >= 0.05) { severity = "ASYMMETRY DETECTED"; sevColor = [200, 100, 0]; feedbackStr = "Detected lateral head tilt or shoulder drop. Consider evaluating unilateral muscle tension."; }
           else { feedbackStr = "Patient demonstrates solid coronal symmetry and leveling."; }
       }
@@ -391,9 +396,6 @@
       
       doc.setFontSize(10); doc.setTextColor(80, 90, 100); doc.setFont("helvetica", "italic");
       doc.text(`"${feedbackStr}"`, 25, dataY + 63);
-
-      doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
-      doc.text("DISCLAIMER: Objective markerless AI estimation. Not a formal medical diagnosis.", 20, 285);
 
       doc.save(`Clinical_Report_${currentMode}_${pId}_${timeSafe}.pdf`);
       
